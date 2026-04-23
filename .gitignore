@@ -1,0 +1,27 @@
+## [Visual Studio]
+.vs/
+[Bb]in/
+[Oo]bj/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+## [Visual Studio Code]
+.vscode/
+
+## [NuGet]
+packages/
+*.nupkg
+
+## [Whisper Models & FFmpeg]
+# 這些檔案較大且會由 ModelManagerService 自動下載
+JFVS_AI_Center.Api/Models/*.bin
+JFVS_AI_Center.Api/Models/*.xml
+JFVS_AI_Center.Api/ffmpeg.exe
+JFVS_AI_Center.Api/ffprobe.exe
+JFVS_AI_Center.Api/ffplay.exe
+
+## [OS]
+.DS_Store
+Thumbs.db
