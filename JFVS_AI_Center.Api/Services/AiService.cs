@@ -46,10 +46,10 @@ public class AiService : IAiService
     {
         // 1. 捷徑檢查
         var (device, action, fastReply) = FastIntentMatcher(userText);
-        if (device != null)
+        if (device != null && action != null && fastReply != null)
         {
-            _ = Task.Run(async () => await BackgroundDeviceTask(device, action, userText, fastReply!));
-            return fastReply!;
+            _ = Task.Run(async () => await BackgroundDeviceTask(device, action, userText, fastReply));
+            return fastReply;
         }
 
         await _lock.WaitAsync();

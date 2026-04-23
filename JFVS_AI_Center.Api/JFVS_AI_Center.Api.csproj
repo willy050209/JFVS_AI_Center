@@ -19,6 +19,12 @@
     <PackageReference Include="Xabe.FFmpeg.Downloader" Version="6.0.2" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Update="scenes.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
   <Target Name="CopyOpenVinoDlls" AfterTargets="Build">
     <ItemGroup>
       <OpenVinoDlls Include="$(OutDir)runtimes\win\native\*.*" />
