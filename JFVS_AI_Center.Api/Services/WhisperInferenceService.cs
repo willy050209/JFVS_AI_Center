@@ -17,7 +17,7 @@ public class WhisperInferenceService(ModelManagerService modelManager, ILogger<W
         try
         {
             using var processor = _factory.CreateBuilder()
-                .WithLanguage("auto")
+                .WithLanguage("zh") // 固定為中文，縮短語言偵測時間
                 .WithOpenVinoEncoder(modelManager.GetOpenVinoXmlPath(), device, null)
                 .Build();
 
@@ -30,7 +30,9 @@ public class WhisperInferenceService(ModelManagerService modelManager, ILogger<W
                 resultText.Append(segment.Text);
             }
 
-            return resultText.ToString().Trim();
+            var result = resultText.ToString().Trim();
+            logger.LogInformation("辨識結果: {Text}", result);
+            return result;
         }
         catch (Exception ex)
         {

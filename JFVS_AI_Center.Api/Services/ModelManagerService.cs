@@ -6,7 +6,7 @@ using Xabe.FFmpeg.Downloader;
 namespace JFVS_AI_Center.Api.Services;
 
 /// <summary>
-/// 啟動時負責確保 Whisper 模型與 FFmpeg 執行檔已準備就緒。
+/// 啟動時負責確保 Whisper 模型、FFmpeg 與 Piper TTS 組件已準備就緒。
 /// </summary>
 public class ModelManagerService(ILogger<ModelManagerService> logger) : IHostedService
 {
@@ -15,95 +15,113 @@ public class ModelManagerService(ILogger<ModelManagerService> logger) : IHostedS
     private const string OpenVinoXmlName = "ggml-base-encoder-openvino.xml";
     private const string OpenVinoBinName = "ggml-base-encoder-openvino.bin";
 
+    // Piper TTS 設定 (使用官方 Huayan 模型，雖然標註 zh_CN 但發音標準且支援繁體)
+    private const string PiperZipUrl = "https://github.com/rhasspy/piper/releases/latest/download/piper_windows_amd64.zip";
+    private const string PiperOnnxUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/main/zh/zh_CN/huayan/medium/zh_CN-huayan-medium.onnx";
+    private const string PiperJsonUrl = "https://huggingface.co/rhasspy/piper-voices/resolve/main/zh/zh_CN/huayan/medium/zh_CN-huayan-medium.onnx.json";
+
+    private readonly string _baseDir = AppContext.BaseDirectory;
     private readonly string _modelFolder = Path.Combine(AppContext.BaseDirectory, "Models");
-    private readonly string _modelPath = Path.Combine(AppContext.BaseDirectory, "Models", ModelFileName);
-    private readonly string _openVinoXmlPath = Path.Combine(AppContext.BaseDirectory, "Models", OpenVinoXmlName);
-    private readonly string _openVinoBinPath = Path.Combine(AppContext.BaseDirectory, "Models", OpenVinoBinName);
+    private readonly string _piperFolder = Path.Combine(AppContext.BaseDirectory, "Piper");
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {
         logger.LogInformation("正在檢查系統環境...");
 
-        // 1. 確保 FFmpeg 已安裝
-        var ffmpegPath = AppContext.BaseDirectory;
+        // 1. 確保 FFmpeg
+        var ffmpegPath = _baseDir;
         if (!File.Exists(Path.Combine(ffmpegPath, "ffmpeg.exe")) && !File.Exists(Path.Combine(ffmpegPath, "ffmpeg")))
         {
-            logger.LogInformation("未偵測到 FFmpeg，正在下載至 {Path}...", ffmpegPath);
+            logger.LogInformation("未偵測到 FFmpeg，正在下載...");
             await FFmpegDownloader.GetLatestVersion(FFmpegVersion.Official, ffmpegPath);
-            logger.LogInformation("FFmpeg 下載完成。");
         }
-        
-        // 明確設定 FFmpeg 執行檔路徑
         FFmpeg.SetExecutablesPath(ffmpegPath);
 
         // 2. 確保目錄存在
         if (!Directory.Exists(_modelFolder)) Directory.CreateDirectory(_modelFolder);
+        if (!Directory.Exists(_piperFolder)) Directory.CreateDirectory(_piperFolder);
 
-        // 3. 確保 Whisper 模型與 OpenVINO 檔案已存在
-        await EnsureModelFilesExistAsync(cancellationToken);
+        // 3. 確保 Whisper 模型
+        await EnsureWhisperFilesAsync(cancellationToken);
+
+        // 4. 確保 Piper TTS
+        await EnsurePiperFilesAsync(cancellationToken);
     }
 
-    private async Task EnsureModelFilesExistAsync(CancellationToken ct)
+    private async Task EnsureWhisperFilesAsync(CancellationToken ct)
     {
-        // 如果三個關鍵檔案都存在，就跳過下載
-        if (File.Exists(_modelPath) && File.Exists(_openVinoXmlPath) && File.Exists(_openVinoBinPath))
+        string modelPath = Path.Combine(_modelFolder, ModelFileName);
+        string xmlPath = Path.Combine(_modelFolder, OpenVinoXmlName);
+        string binPath = Path.Combine(_modelFolder, OpenVinoBinName);
+
+        if (File.Exists(modelPath) && File.Exists(xmlPath) && File.Exists(binPath))
         {
-            logger.LogInformation("Whisper 模型與 OpenVINO 檔案已就緒。");
+            logger.LogInformation("Whisper 模型已就緒。");
             return;
         }
 
         string zipPath = Path.Combine(_modelFolder, ModelZipName);
-        
-        // 1. 下載完整的模型壓縮包 (包含標準 GGML 與 OpenVINO Encoder)
         if (!File.Exists(zipPath))
         {
-            logger.LogInformation("正在從 Intel Hugging Face 下載完整模型包 (包含 OpenVINO 加速組件)...");
-            var url = "https://huggingface.co/Intel/whisper.cpp-openvino-models/resolve/main/ggml-base-models.zip";
-            await DownloadFileAsync(url, zipPath, ct);
-            logger.LogInformation("模型包下載完成。");
+            logger.LogInformation("正在下載 Whisper OpenVINO 模型包...");
+            await DownloadFileAsync("https://huggingface.co/Intel/whisper.cpp-openvino-models/resolve/main/ggml-base-models.zip", zipPath, ct);
         }
 
-        // 2. 解壓縮
-        logger.LogInformation("正在解壓縮模型包...");
-        try 
+        logger.LogInformation("正在解壓縮 Whisper 模型...");
+        ZipFile.ExtractToDirectory(zipPath, _modelFolder, overwriteFiles: true);
+        File.Delete(zipPath);
+    }
+
+    private async Task EnsurePiperFilesAsync(CancellationToken ct)
+    {
+        string piperExe = Path.Combine(_piperFolder, "piper", "piper.exe");
+        if (!File.Exists(piperExe))
         {
-            ZipFile.ExtractToDirectory(zipPath, _modelFolder, overwriteFiles: true);
-            logger.LogInformation("解壓縮完成。");
+            logger.LogInformation("正在下載 Piper TTS 引擎...");
+            string zipPath = Path.Combine(_piperFolder, "piper.zip");
+            await DownloadFileAsync(PiperZipUrl, zipPath, ct);
+            
+            logger.LogInformation("正在解壓縮 Piper...");
+            ZipFile.ExtractToDirectory(zipPath, _piperFolder, overwriteFiles: true);
+            File.Delete(zipPath);
         }
-        catch (Exception ex)
+
+        string modelPath = GetPiperModelPath();
+        string jsonPath = modelPath + ".json";
+
+        if (!File.Exists(modelPath))
         {
-            logger.LogError(ex, "解壓縮模型包時發生錯誤。");
-            throw;
+            logger.LogInformation("正在下載 Piper 中文模型 (.onnx)...");
+            await DownloadFileAsync(PiperOnnxUrl, modelPath, ct);
         }
-        finally
+
+        if (!File.Exists(jsonPath))
         {
-            // 刪除暫存的 zip
-            if (File.Exists(zipPath)) File.Delete(zipPath);
+            logger.LogInformation("正在下載 Piper 中文模型設定 (.json)...");
+            await DownloadFileAsync(PiperJsonUrl, jsonPath, ct);
         }
+
+        logger.LogInformation("Piper TTS 組件已就緒。");
     }
 
     private async Task DownloadFileAsync(string url, string path, CancellationToken ct)
     {
-        var tempPath = path + ".tmp";
-        if (File.Exists(tempPath)) File.Delete(tempPath);
-
         using var client = new HttpClient();
-        // 設定較長的逾時時間，因為模型檔案較大
+        client.DefaultRequestHeaders.Add("User-Agent", "JFVS-AI-Center-Server");
         client.Timeout = TimeSpan.FromMinutes(10);
+        
         var response = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct);
         response.EnsureSuccessStatusCode();
         
-        using (var fs = File.Create(tempPath))
-        {
-            await response.Content.CopyToAsync(fs, ct);
-        }
-
-        if (File.Exists(path)) File.Delete(path);
-        File.Move(tempPath, path);
+        using var fs = File.Create(path);
+        await response.Content.CopyToAsync(fs, ct);
     }
 
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
-    public string GetModelPath() => _modelPath;
-    public string GetOpenVinoXmlPath() => _openVinoXmlPath;
+    public string GetModelPath() => Path.Combine(_modelFolder, ModelFileName);
+    public string GetOpenVinoXmlPath() => Path.Combine(_modelFolder, OpenVinoXmlName);
+    
+    public string GetPiperExePath() => Path.Combine(_piperFolder, "piper", "piper.exe");
+    public string GetPiperModelPath() => Path.Combine(_piperFolder, "zh_CN-huayan-medium.onnx");
 }

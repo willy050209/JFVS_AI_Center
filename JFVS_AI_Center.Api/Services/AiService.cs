@@ -48,18 +48,26 @@ public class AiService : IAiService
 
     public async Task<string> ProcessChatAsync(string userText, string sessionId = "default")
     {
-        // 1. 捷徑檢查
-        var (device, action, fastReply) = FastIntentMatcher(userText);
-        if (device != null && action != null && fastReply != null)
+        try
         {
-            _ = Task.Run(async () => await BackgroundDeviceTask(sessionId, device, action, userText, fastReply));
-            return fastReply;
+            // 1. 捷徑檢查
+            var (device, action, fastReply) = FastIntentMatcher(userText);
+            if (device != null && action != null && fastReply != null)
+            {
+                _ = Task.Run(async () => await BackgroundDeviceTask(sessionId, device, action, userText, fastReply));
+                return fastReply;
+            }
+
+            var session = GetOrCreateSession(sessionId);
+            session.AddMessage(ChatMessage.CreateUserMessage(userText));
+
+            return await RunChatWithToolsAsync(session);
         }
-
-        var session = GetOrCreateSession(sessionId);
-        session.AddMessage(ChatMessage.CreateUserMessage(userText));
-
-        return await RunChatWithToolsAsync(session);
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "AI 服務處理失敗，使用預設回覆。");
+            return "本地大腦連線異常，但我還是可以跟您聊天喔。";
+        }
     }
 
     private async Task<string> RunChatWithToolsAsync(ChatSession session)
