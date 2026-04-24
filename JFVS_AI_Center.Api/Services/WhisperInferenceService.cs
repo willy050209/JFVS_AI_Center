@@ -52,44 +52,23 @@ public class WhisperInferenceService(ModelManagerService modelManager, ILogger<W
             var availableDevices = OpenVinoDeviceDetector.GetAvailableDevices(logger);
             
             if (availableDevices.Count > 0)
-            {
-                logger.LogInformation("偵測到可用 OpenVINO 裝置: {Devices}", string.Join(", ", availableDevices));
-                
-                // 優先順序: NPU -> GPU -> CPU
-                
-                // 1. 尋找 NPU (包含 NPU.0 等變體)
-                var npuDevice = availableDevices
-                    .Where(d => d.StartsWith("NPU", StringComparison.OrdinalIgnoreCase))
-                    .OrderByDescending(d => d)
-                    .FirstOrDefault();
+			{
+				logger.LogInformation("偵測到可用 OpenVINO 裝置: {Devices}", string.Join(", ", availableDevices));
 
-                if (npuDevice != null)
-                {
-                    _detectedDevice = npuDevice;
-                }
-                else
-                {
-                    // 2. 尋找 GPU (包含 GPU.0, GPU.1 等)
-                    // 在 Intel 平台上，通常 GPU.0 是內顯，GPU.1 是獨顯 (如果有)，優先選編號大的
-                    var gpuDevice = availableDevices
-                        .Where(d => d.StartsWith("GPU", StringComparison.OrdinalIgnoreCase))
-                        .OrderByDescending(d => d)
-                        .FirstOrDefault();
+				// 定義裝置類型的優先順序
+				string[] priorityPrefixes = { "NPU", "GPU", "CPU" };
 
-                    if (gpuDevice != null)
-                    {
-                        _detectedDevice = gpuDevice;
-                    }
-                    else if (availableDevices.Any(d => d.Equals("CPU", StringComparison.OrdinalIgnoreCase)))
-                    {
-                        _detectedDevice = "CPU";
-                    }
-                }
-            }
-            else
-            {
-                logger.LogWarning("未偵測到任何 OpenVINO 加速裝置，將使用預設探測邏輯。");
-            }
+				_detectedDevice = priorityPrefixes
+					.Select(prefix => availableDevices
+						.Where(d => d.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+						.OrderByDescending(d => d)
+						.FirstOrDefault())
+					.FirstOrDefault(d => d != null);
+			}
+			else
+			{
+				logger.LogWarning("未偵測到任何 OpenVINO 加速裝置，將使用預設探測邏輯。");
+			}
         }
         catch (Exception ex)
         {
