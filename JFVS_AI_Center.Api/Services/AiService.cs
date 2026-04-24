@@ -25,7 +25,8 @@ public class AiService : IAiService
 你具備控制物聯網設備的能力，如果訪客要求開關「燈光」或「風扇」，請務必使用 control_device 工具。
 回覆必須簡練（30-50字），語氣溫文爾雅且熱情。
 介紹景點時請使用 get_scene_info 工具，且擷取最相關的一兩句話回答，不要給太多資料。
-回覆時不要提到具體校名與地名，使用籠統稱呼即可。";
+回覆時不要提到具體校名與地名，使用籠統稱呼即可。
+**回覆時嚴禁使用 Emoji 或任何特殊表情符號。**";
 
     public AiService(
         IMqttService mqttService, 
@@ -144,10 +145,28 @@ public class AiService : IAiService
         var finalReply = completion.Content[0].Text;
         session.AddMessage(ChatMessage.CreateAssistantMessage(finalReply));
 
-        // 清理文字 (比照 Python translate/replace)
-        finalReply = Regex.Replace(finalReply, "[*#「」『』]", "").Replace("\n", " ").Trim();
+        // 清理文字 (移除 Emoji 與不適合語音合成的符號)
+        finalReply = CleanTextForTts(finalReply);
+        
         _logger.LogInformation("<< [Session: {SessionId}] [回傳]: {Reply}", session.SessionId, finalReply);
         return finalReply;
+    }
+
+    private string CleanTextForTts(string text)
+    {
+        if (string.IsNullOrEmpty(text)) return text;
+
+        // 1. 移除 Markdown 符號與特殊括號
+        text = Regex.Replace(text, @"[*#_~「」『』]", "");
+
+        // 2. 移除 Emoji (包含 Symbol/Other \p{So} 與 Surrogate Pairs \p{Cs})
+        text = Regex.Replace(text, @"\p{So}|\p{Cs}", "");
+
+        // 3. 處理換行與多餘空白
+        text = text.Replace("\n", " ").Replace("\r", " ");
+        text = Regex.Replace(text, @"\s+", " ");
+
+        return text.Trim();
     }
 
     private (string? Device, string? Action, string? FastReply) FastIntentMatcher(string text)
