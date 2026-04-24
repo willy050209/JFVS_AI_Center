@@ -1,12 +1,14 @@
 using OpenAI.Chat;
+using System.Collections.Concurrent;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using JFVS_AI_Center.Api.Models;
 
 namespace JFVS_AI_Center.Api.Services;
 
 public interface IAiService
 {
-    Task<string> ProcessChatAsync(string userText);
+    Task<string> ProcessChatAsync(string userText, string sessionId = "default");
 }
 
 public class AiService : IAiService
@@ -15,8 +17,7 @@ public class AiService : IAiService
     private readonly ISceneService _sceneService;
     private readonly ILogger<AiService> _logger;
     private readonly ChatClient _client;
-    private readonly List<ChatMessage> _chatMessages = new();
-    private readonly SemaphoreSlim _lock = new(1, 1);
+    private readonly ConcurrentDictionary<string, ChatSession> _sessions = new();
 
     private const string SystemPrompt = @"你現在扮演『小瑞』，一個來自技術型高中資訊科的學生。
 你負責介紹學校景點（圖書館、實習大樓、思源亭）。
@@ -38,44 +39,30 @@ public class AiService : IAiService
             Endpoint = new Uri("http://127.0.0.1:1234/v1")
         });
         _client = openAiClient.GetChatClient("local-model");
-
-        _chatMessages.Add(ChatMessage.CreateSystemMessage(SystemPrompt));
     }
 
-    public async Task<string> ProcessChatAsync(string userText)
+    private ChatSession GetOrCreateSession(string sessionId)
+    {
+        return _sessions.GetOrAdd(sessionId, id => new ChatSession(id, SystemPrompt));
+    }
+
+    public async Task<string> ProcessChatAsync(string userText, string sessionId = "default")
     {
         // 1. 捷徑檢查
         var (device, action, fastReply) = FastIntentMatcher(userText);
         if (device != null && action != null && fastReply != null)
         {
-            _ = Task.Run(async () => await BackgroundDeviceTask(device, action, userText, fastReply));
+            _ = Task.Run(async () => await BackgroundDeviceTask(sessionId, device, action, userText, fastReply));
             return fastReply;
         }
 
-        await _lock.WaitAsync();
-        try
-        {
-            _chatMessages.Add(ChatMessage.CreateUserMessage(userText));
+        var session = GetOrCreateSession(sessionId);
+        session.AddMessage(ChatMessage.CreateUserMessage(userText));
 
-            // 限制歷史紀錄長度
-            if (_chatMessages.Count > 15)
-            {
-                var systemMsg = _chatMessages[0];
-                var recentMsgs = _chatMessages.Skip(_chatMessages.Count - 10).ToList();
-                _chatMessages.Clear();
-                _chatMessages.Add(systemMsg);
-                _chatMessages.AddRange(recentMsgs);
-            }
-
-            return await RunChatWithToolsAsync();
-        }
-        finally
-        {
-            _lock.Release();
-        }
+        return await RunChatWithToolsAsync(session);
     }
 
-    private async Task<string> RunChatWithToolsAsync()
+    private async Task<string> RunChatWithToolsAsync(ChatSession session)
     {
         var tools = new List<ChatTool>
         {
@@ -110,11 +97,11 @@ public class AiService : IAiService
         };
         foreach (var tool in tools) options.Tools.Add(tool);
 
-        ChatCompletion completion = await _client.CompleteChatAsync(_chatMessages, options);
+        ChatCompletion completion = await _client.CompleteChatAsync(session.Messages, options);
 
         if (completion.FinishReason == ChatFinishReason.ToolCalls)
         {
-            _chatMessages.Add(ChatMessage.CreateAssistantMessage(completion));
+            session.AddMessage(ChatMessage.CreateAssistantMessage(completion));
 
             foreach (var toolCall in completion.ToolCalls)
             {
@@ -133,58 +120,65 @@ public class AiService : IAiService
                     result = await _mqttService.ControlDeviceAsync(deviceName, action);
                 }
 
-                _chatMessages.Add(ChatMessage.CreateToolMessage(toolCall.Id, result));
+                session.AddMessage(ChatMessage.CreateToolMessage(toolCall.Id, result));
             }
 
             // 第二次請求
-            completion = await _client.CompleteChatAsync(_chatMessages);
+            completion = await _client.CompleteChatAsync(session.Messages);
         }
 
         var finalReply = completion.Content[0].Text;
-        _chatMessages.Add(ChatMessage.CreateAssistantMessage(finalReply));
+        session.AddMessage(ChatMessage.CreateAssistantMessage(finalReply));
 
         // 清理文字 (比照 Python translate/replace)
         finalReply = Regex.Replace(finalReply, "[*#「」『』]", "").Replace("\n", " ").Trim();
-        _logger.LogInformation("<< [回傳]: {Reply}", finalReply);
+        _logger.LogInformation("<< [Session: {SessionId}] [回傳]: {Reply}", session.SessionId, finalReply);
         return finalReply;
     }
 
     private (string? Device, string? Action, string? FastReply) FastIntentMatcher(string text)
     {
+        // 簡單的否定詞檢查：如果動作關鍵字前方出現否定詞，則不觸發捷徑
+        var negations = new[] { "不", "別", "毋", "沒", "取消" };
+        
+        bool IsPositive(string actionKey)
+        {
+            int index = text.IndexOf(actionKey);
+            if (index <= 0) return index == 0;
+            
+            // 檢查關鍵字前方 2 個字元
+            int start = Math.Max(0, index - 2);
+            var prefix = text.Substring(start, index - start);
+            return !negations.Any(n => prefix.Contains(n));
+        }
+
         if (text.Contains("風扇") || text.Contains("电扇"))
         {
-            if (new[] { "關", "停", "off" }.Any(text.Contains))
+            if (new[] { "關", "停", "off" }.Any(k => text.Contains(k) && IsPositive(k)))
                 return ("風扇", "off", "好的，已經為您關閉涼亭的風扇囉！");
-            if (new[] { "開", "啟動", "on", "很熱" }.Any(text.Contains))
+            if (new[] { "開", "啟", "on", "熱" }.Any(k => text.Contains(k) && IsPositive(k)))
                 return ("風扇", "on", "好的，馬上為您開啟風扇！");
         }
         if (text.Contains("燈") || text.Contains("灯"))
         {
-            if (new[] { "關", "熄", "off" }.Any(text.Contains))
+            if (new[] { "關", "熄", "off" }.Any(k => text.Contains(k) && IsPositive(k)))
                 return ("燈光", "off", "好的，已經幫您把燈關掉了。");
-            if (new[] { "開", "亮", "on", "很暗" }.Any(text.Contains))
+            if (new[] { "開", "亮", "on", "暗" }.Any(k => text.Contains(k) && IsPositive(k)))
                 return ("燈光", "on", "沒問題，已經為您點亮燈光了！");
         }
         return (null, null, null);
     }
 
-    private async Task BackgroundDeviceTask(string device, string action, string userText, string fastReply)
+    private async Task BackgroundDeviceTask(string sessionId, string device, string action, string userText, string fastReply)
     {
         await _mqttService.ControlDeviceAsync(device, action);
         try
         {
             await Task.Delay(1000);
-            await _lock.WaitAsync();
-            try
-            {
-                var syncMsg = $"[系統通知] 訪客剛說「{userText}」，系統已啟動捷徑控制了{device}並回覆「{fastReply}」。請知悉設備狀態，不需回覆此訊息。";
-                _chatMessages.Add(ChatMessage.CreateSystemMessage(syncMsg));
-                _logger.LogInformation(" >> [背景同步] 已更新本地大腦狀態。");
-            }
-            finally
-            {
-                _lock.Release();
-            }
+            var session = GetOrCreateSession(sessionId);
+            var syncMsg = $"[系統通知] 訪客剛說「{userText}」，系統已啟動捷徑控制了{device}並回覆「{fastReply}」。請知悉設備狀態，不需回覆此訊息。";
+            session.AddMessage(ChatMessage.CreateSystemMessage(syncMsg));
+            _logger.LogInformation(" >> [背景同步] 已更新本地大腦狀態 (Session: {SessionId})。", sessionId);
         }
         catch (Exception e)
         {

@@ -5,6 +5,8 @@ using Microsoft.AspNetCore.Mvc;
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
+builder.Services.Configure<MqttOptions>(builder.Configuration.GetSection("Mqtt"));
+
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
@@ -12,7 +14,10 @@ builder.Services.AddSwaggerGen(c =>
 });
 
 // Register existing services
-builder.Services.AddSingleton<IMqttService, MqttService>();
+builder.Services.AddSingleton<MqttService>();
+builder.Services.AddSingleton<IMqttService>(sp => sp.GetRequiredService<MqttService>());
+builder.Services.AddHostedService(sp => sp.GetRequiredService<MqttService>());
+
 builder.Services.AddSingleton<ISceneService, SceneService>();
 builder.Services.AddSingleton<IAiService, AiService>();
 
@@ -47,7 +52,7 @@ app.MapPost("/chat", async ([FromBody] ChatRequest request, [FromServices] IAiSe
 
     try
     {
-        var responseText = await aiService.ProcessChatAsync(request.Text);
+        var responseText = await aiService.ProcessChatAsync(request.Text, request.SessionId);
         return Results.Ok(new ChatResponse { Response = responseText });
     }
     catch (Exception ex)

@@ -1,25 +1,84 @@
+using JFVS_AI_Center.Api.Models;
+using Microsoft.Extensions.Options;
 using MQTTnet;
 using MQTTnet.Client;
 using System.Text;
 
 namespace JFVS_AI_Center.Api.Services;
 
-public class MqttService : IMqttService
+public class MqttService : IMqttService, IHostedService, IDisposable
 {
     private readonly ILogger<MqttService> _logger;
-    private readonly string _mqttHost = "broker.emqx.io";
-    private readonly int _mqttPort = 1883;
-    private readonly string _username = "jfvs000";
-    private readonly string _password = "jfvs000";
+    private readonly MqttOptions _options;
+    private readonly IMqttClient _mqttClient;
+    private readonly MqttClientOptions _mqttClientOptions;
+    private bool _disposed;
 
-    public MqttService(ILogger<MqttService> logger)
+    public MqttService(ILogger<MqttService> logger, IOptions<MqttOptions> options)
     {
         _logger = logger;
+        _options = options.Value;
+
+        var factory = new MqttFactory();
+        _mqttClient = factory.CreateMqttClient();
+
+        _mqttClientOptions = new MqttClientOptionsBuilder()
+            .WithTcpServer(_options.Host, _options.Port)
+            .WithCredentials(_options.Username, _options.Password)
+            .WithCleanSession()
+            .Build();
+
+        _mqttClient.DisconnectedAsync += async e =>
+        {
+            _logger.LogWarning("MQTT 已斷線，正在嘗試重連...");
+            await Task.Delay(TimeSpan.FromSeconds(5));
+            try
+            {
+                if (!_disposed)
+                {
+                    await _mqttClient.ConnectAsync(_mqttClientOptions, CancellationToken.None);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "MQTT 重連失敗");
+            }
+        };
+    }
+
+    public async Task StartAsync(CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("正在啟動 MQTT 服務...");
+        try
+        {
+            await _mqttClient.ConnectAsync(_mqttClientOptions, cancellationToken);
+            _logger.LogInformation("MQTT 已成功連線至 {Host}", _options.Host);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "MQTT 初始連線失敗");
+            // 我們不拋出異常，讓重連機制處理
+        }
+    }
+
+    public async Task StopAsync(CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("正在停止 MQTT 服務...");
+        if (_mqttClient.IsConnected)
+        {
+            await _mqttClient.DisconnectAsync(new MqttClientDisconnectOptions(), cancellationToken);
+        }
     }
 
     public async Task<string> ControlDeviceAsync(string deviceName, string action)
     {
         _logger.LogInformation("[MQTT 工具觸發] 正在控制設備: {DeviceName}, 動作: {Action}", deviceName, action);
+
+        if (!_mqttClient.IsConnected)
+        {
+            _logger.LogWarning("MQTT 尚未連線，嘗試發送指令失敗");
+            return "MQTT 伺服器連線中，請稍後再試。";
+        }
 
         string topic;
         if (deviceName.Contains("燈"))
@@ -56,30 +115,26 @@ public class MqttService : IMqttService
 
         try
         {
-            var mqttFactory = new MqttFactory();
-            using var mqttClient = mqttFactory.CreateMqttClient();
-
-            var options = new MqttClientOptionsBuilder()
-                .WithTcpServer(_mqttHost, _mqttPort)
-                .WithCredentials(_username, _password)
-                .Build();
-
-            await mqttClient.ConnectAsync(options, CancellationToken.None);
-
             var message = new MqttApplicationMessageBuilder()
                 .WithTopic(topic)
                 .WithPayload(mqttPayload)
+                .WithQualityOfServiceLevel(MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce)
                 .Build();
 
-            await mqttClient.PublishAsync(message, CancellationToken.None);
-            await mqttClient.DisconnectAsync();
+            await _mqttClient.PublishAsync(message, CancellationToken.None);
 
             return $"已成功將{deviceName}{statusTw}囉！";
         }
         catch (Exception e)
         {
-            _logger.LogError(e, "連線設備失敗");
+            _logger.LogError(e, "發送 MQTT 指令失敗");
             return $"連線設備失敗：{e.Message}";
         }
+    }
+
+    public void Dispose()
+    {
+        _disposed = true;
+        _mqttClient?.Dispose();
     }
 }

@@ -84,14 +84,22 @@ public class ModelManagerService(ILogger<ModelManagerService> logger) : IHostedS
 
     private async Task DownloadFileAsync(string url, string path, CancellationToken ct)
     {
+        var tempPath = path + ".tmp";
+        if (File.Exists(tempPath)) File.Delete(tempPath);
+
         using var client = new HttpClient();
         // 設定較長的逾時時間，因為模型檔案較大
         client.Timeout = TimeSpan.FromMinutes(10);
         var response = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct);
         response.EnsureSuccessStatusCode();
         
-        using var fs = File.Create(path);
-        await response.Content.CopyToAsync(fs, ct);
+        using (var fs = File.Create(tempPath))
+        {
+            await response.Content.CopyToAsync(fs, ct);
+        }
+
+        if (File.Exists(path)) File.Delete(path);
+        File.Move(tempPath, path);
     }
 
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
