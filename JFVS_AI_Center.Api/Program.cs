@@ -47,6 +47,9 @@ builder.WebHost.ConfigureKestrel(options =>
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
+app.UseDefaultFiles();
+app.UseStaticFiles();
+
 app.UseSwagger();
 app.UseSwaggerUI(c =>
 {
@@ -226,6 +229,6 @@ app.MapGet("/api/tts-sapi", async (
     }
 });
 
-app.MapGet("/", () => "JFVS AI Center API is running.");
+//app.MapGet("/", () => "JFVS AI Center API is running.");
 
 app.Run();

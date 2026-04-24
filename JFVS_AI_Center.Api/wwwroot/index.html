@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JFVS AI Center - STT & TTS</title>
+    <style>
+        :root {
+            --primary-color: #4a90e2;
+            --bg-color: #121212;
+            --card-bg: #1e1e1e;
+            --text-color: #e0e0e0;
+            --border-radius: 12px;
+            --accent-color: #00c853;
+            --error-color: #ff5252;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 900px;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        h1 {
+            color: var(--primary-color);
+            margin-bottom: 5px;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #333;
+            padding-bottom: 10px;
+        }
+
+        .tab-btn {
+            background: none;
+            border: none;
+            color: #888;
+            padding: 10px 20px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: 0.3s;
+            border-radius: var(--border-radius);
+        }
+
+        .tab-btn.active {
+            color: var(--primary-color);
+            background: rgba(74, 144, 226, 0.1);
+        }
+
+        .panel {
+            display: none;
+            background: var(--card-bg);
+            padding: 25px;
+            border-radius: var(--border-radius);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+            animation: fadeIn 0.3s ease-in-out;
+        }
+
+        .panel.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .input-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+
+        textarea {
+            width: 100%;
+            height: 120px;
+            background: #2a2a2a;
+            border: 1px solid #444;
+            border-radius: 8px;
+            color: #fff;
+            padding: 12px;
+            font-size: 16px;
+            resize: vertical;
+            box-sizing: border-box;
+        }
+
+        .controls {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            padding: 12px 24px;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+            transition: 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .primary-btn { background: var(--primary-color); color: white; }
+        .primary-btn:hover { opacity: 0.9; }
+        .primary-btn:disabled { background: #555; cursor: not-allowed; }
+
+        .secondary-btn { background: #444; color: white; }
+        .secondary-btn:hover { background: #555; }
+
+        .record-btn { background: var(--error-color); color: white; }
+        .record-btn.recording { animation: pulse 1.5s infinite; }
+
+        @keyframes pulse {
+            0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 82, 82, 0.7); }
+            70% { transform: scale(1.05); box-shadow: 0 0 0 10px rgba(255, 82, 82, 0); }
+            100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 82, 82, 0); }
+        }
+
+        .result-box {
+            margin-top: 20px;
+            padding: 15px;
+            background: rgba(0,0,0,0.2);
+            border-radius: 8px;
+            border-left: 4px solid var(--primary-color);
+        }
+
+        .audio-player {
+            margin-top: 15px;
+            width: 100%;
+        }
+
+        .status {
+            font-size: 14px;
+            color: #aaa;
+            margin-top: 10px;
+        }
+
+        .voice-chat-history {
+            height: 300px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            padding: 10px;
+            background: rgba(0,0,0,0.2);
+            border-radius: 8px;
+            margin-bottom: 15px;
+        }
+
+        .msg {
+            max-width: 80%;
+            padding: 10px 15px;
+            border-radius: 15px;
+            font-size: 15px;
+            line-height: 1.4;
+        }
+
+        .msg.user {
+            align-self: flex-end;
+            background: var(--primary-color);
+            color: white;
+            border-bottom-right-radius: 2px;
+        }
+
+        .msg.ai {
+            align-self: flex-start;
+            background: #444;
+            color: white;
+            border-bottom-left-radius: 2px;
+        }
+
+        #drop-zone {
+            border: 2px dashed #444;
+            padding: 30px;
+            text-align: center;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: 0.3s;
+            margin-bottom: 15px;
+        }
+
+        #drop-zone:hover, #drop-zone.dragover {
+            border-color: var(--primary-color);
+            background: rgba(74, 144, 226, 0.05);
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h1>JFVS AI Center</h1>
+        <p>整合 Whisper 與多種 TTS 引擎的語音實驗室</p>
+    </header>
+
+    <div class="tabs">
+        <button class="tab-btn active" onclick="showPanel('stt')">語音轉文字 (STT)</button>
+        <button class="tab-btn" onclick="showPanel('tts')">文字轉語音 (TTS)</button>
+        <button class="tab-btn" onclick="showPanel('chat')">語音對話 (Voice Chat)</button>
+    </div>
+
+    <!-- STT Panel -->
+    <div id="stt-panel" class="panel active">
+        <h3>Whisper 語音轉譯</h3>
+        <div id="drop-zone">
+            點擊或拖放音訊檔案至此 (mp3, wav, m4a...)
+            <input type="file" id="file-input" hidden accept="audio/*">
+        </div>
+        <div class="controls">
+            <button id="stt-record-btn" class="record-btn" onclick="toggleSTTRecord()">
+                <span>🎤</span> <span id="stt-record-text">開始錄音</span>
+            </button>
+            <button class="primary-btn" id="stt-send-btn" onclick="uploadSTT()" disabled>
+                <span>🚀</span> 傳送轉譯
+            </button>
+        </div>
+        <div class="status" id="stt-status"></div>
+        <div class="result-box" id="stt-result" style="display: none;">
+            <strong>轉譯結果：</strong>
+            <p id="stt-text"></p>
+        </div>
+    </div>
+
+    <!-- TTS Panel -->
+    <div id="tts-panel" class="panel">
+        <h3>語音合成</h3>
+        <div class="input-group">
+            <label>請輸入要轉換的文字：</label>
+            <textarea id="tts-input" placeholder="你好，我是 JFVS AI 助理..."></textarea>
+        </div>
+        <div class="controls">
+            <select id="tts-engine" style="padding: 10px; border-radius: 8px; background: #2a2a2a; color: white; border: 1px solid #444;">
+                <option value="standard">預設引擎 (Piper/OpenVINO)</option>
+                <option value="sapi">Windows SAPI 引擎</option>
+            </select>
+            <button class="primary-btn" onclick="generateTTS()">
+                <span>🔊</span> 生成語音
+            </button>
+        </div>
+        <div class="status" id="tts-status"></div>
+        <div id="tts-audio-container"></div>
+    </div>
+
+    <!-- Voice Chat Panel -->
+    <div id="chat-panel" class="panel">
+        <h3>AI 語音對話</h3>
+        <div class="voice-chat-history" id="chat-history">
+            <div class="msg ai">你好！點擊按鈕對我說話吧。</div>
+        </div>
+        <div class="controls">
+            <button id="chat-record-btn" class="record-btn" onclick="toggleChatRecord()">
+                <span>🎤</span> <span id="chat-record-text">開始對話</span>
+            </button>
+            <button class="secondary-btn" onclick="clearChat()">清除對話</button>
+        </div>
+        <div class="status" id="chat-status"></div>
+    </div>
+</div>
+
+<script>
+    let mediaRecorder;
+    let audioChunks = [];
+    let isRecording = false;
+    let currentBlob = null;
+
+    function showPanel(panelId) {
+        document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.getElementById(panelId + '-panel').classList.add('active');
+        event.currentTarget.classList.add('active');
+    }
+
+    // --- STT Logic ---
+    const dropZone = document.getElementById('drop-zone');
+    const fileInput = document.getElementById('file-input');
+
+    dropZone.onclick = () => fileInput.click();
+    fileInput.onchange = (e) => {
+        if (e.target.files.length > 0) handleFile(e.target.files[0]);
+    };
+
+    dropZone.ondragover = (e) => { e.preventDefault(); dropZone.classList.add('dragover'); };
+    dropZone.ondragleave = () => dropZone.classList.remove('dragover');
+    dropZone.ondrop = (e) => {
+        e.preventDefault();
+        dropZone.classList.remove('dragover');
+        if (e.dataTransfer.files.length > 0) handleFile(e.dataTransfer.files[0]);
+    };
+
+    function handleFile(file) {
+        currentBlob = file;
+        dropZone.innerText = `已選擇：${file.name}`;
+        document.getElementById('stt-send-btn').disabled = false;
+    }
+
+    async function toggleSTTRecord() {
+        if (!isRecording) {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            mediaRecorder = new MediaRecorder(stream);
+            audioChunks = [];
+            mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+            mediaRecorder.onstop = () => {
+                currentBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                document.getElementById('stt-send-btn').disabled = false;
+                dropZone.innerText = "錄音已完成，可以點擊傳送";
+            };
+            mediaRecorder.start();
+            isRecording = true;
+            document.getElementById('stt-record-btn').classList.add('recording');
+            document.getElementById('stt-record-text').innerText = "停止錄音";
+        } else {
+            mediaRecorder.stop();
+            isRecording = false;
+            document.getElementById('stt-record-btn').classList.remove('recording');
+            document.getElementById('stt-record-text').innerText = "重新錄音";
+        }
+    }
+
+    async function uploadSTT() {
+        if (!currentBlob) return;
+        const status = document.getElementById('stt-status');
+        const resultBox = document.getElementById('stt-result');
+        const resultText = document.getElementById('stt-text');
+        
+        status.innerText = "轉譯中...";
+        const formData = new FormData();
+        formData.append('file', currentBlob, 'audio.wav');
+
+        try {
+            const resp = await fetch('/api/transcribe', { method: 'POST', body: formData });
+            const data = await resp.json();
+            status.innerText = "完成";
+            resultBox.style.display = 'block';
+            resultText.innerText = data.text;
+        } catch (err) {
+            status.innerText = "發生錯誤：" + err.message;
+        }
+    }
+
+    // --- TTS Logic ---
+    async function generateTTS() {
+        const text = document.getElementById('tts-input').value;
+        const engine = document.getElementById('tts-engine').value;
+        const status = document.getElementById('tts-status');
+        const container = document.getElementById('tts-audio-container');
+
+        if (!text) return alert("請輸入文字");
+
+        status.innerText = "正在合成語音...";
+        container.innerHTML = "";
+
+        const endpoint = engine === 'sapi' ? '/api/tts-sapi' : '/api/tts';
+        const url = `${endpoint}?text=${encodeURIComponent(text)}`;
+
+        try {
+            const resp = await fetch(url);
+            if (!resp.ok) throw new Error("API 錯誤");
+            const blob = await resp.blob();
+            const audioUrl = URL.createObjectURL(blob);
+            
+            const audio = document.createElement('audio');
+            audio.controls = true;
+            audio.src = audioUrl;
+            audio.className = "audio-player";
+            container.appendChild(audio);
+            audio.play();
+            
+            status.innerText = "合成成功";
+        } catch (err) {
+            status.innerText = "失敗：" + err.message;
+        }
+    }
+
+    // --- Voice Chat Logic ---
+    let chatSessionId = "session-" + Math.random().toString(36).substr(2, 9);
+
+    async function toggleChatRecord() {
+        if (!isRecording) {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            mediaRecorder = new MediaRecorder(stream);
+            audioChunks = [];
+            mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+            mediaRecorder.onstop = sendVoiceChat;
+            mediaRecorder.start();
+            isRecording = true;
+            document.getElementById('chat-record-btn').classList.add('recording');
+            document.getElementById('chat-record-text').innerText = "我正在聽...";
+        } else {
+            mediaRecorder.stop();
+            isRecording = false;
+            document.getElementById('chat-record-btn').classList.remove('recording');
+            document.getElementById('chat-record-text').innerText = "開始對話";
+        }
+    }
+
+    async function sendVoiceChat() {
+        const status = document.getElementById('chat-status');
+        const history = document.getElementById('chat-history');
+        const blob = new Blob(audioChunks, { type: 'audio/wav' });
+
+        status.innerText = "思考中...";
+        const formData = new FormData();
+        formData.append('file', blob, 'chat.wav');
+
+        try {
+            const resp = await fetch(`/api/voice-chat?sessionId=${chatSessionId}`, { 
+                method: 'POST', 
+                body: formData 
+            });
+            const data = await resp.json();
+            
+            if (data.userText) {
+                addMessage(history, data.userText, 'user');
+                addMessage(history, data.aiResponse, 'ai');
+                
+                if (data.audioBase64) {
+                    const audio = new Audio("data:audio/wav;base64," + data.audioBase64);
+                    audio.play();
+                }
+            } else {
+                status.innerText = data.aiResponse || "聽不清楚，請再試一次";
+            }
+            status.innerText = "";
+        } catch (err) {
+            status.innerText = "對話錯誤：" + err.message;
+        }
+    }
+
+    function addMessage(container, text, role) {
+        const div = document.createElement('div');
+        div.className = `msg ${role}`;
+        div.innerText = text;
+        container.appendChild(div);
+        container.scrollTop = container.scrollHeight;
+    }
+
+    function clearChat() {
+        document.getElementById('chat-history').innerHTML = '<div class="msg ai">對話已清除。點擊按鈕對我說話吧。</div>';
+    }
+</script>
+
+</body>
+</html>
