@@ -8,6 +8,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.Configure<MqttOptions>(builder.Configuration.GetSection("Mqtt"));
+builder.Services.Configure<AiOptions>(builder.Configuration.GetSection("Ai"));
 
 // Configure JSON options for Minimal APIs to support Chinese characters in output
 builder.Services.ConfigureHttpJsonOptions(options =>

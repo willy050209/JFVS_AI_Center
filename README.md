@@ -36,14 +36,30 @@ JFVS AI Center 是一個基於 ASP.NET Core 10.0 的全方位 AI 整合伺服器
 ## 🛠️ 系統配置與自訂
 
 ### 核心設定 (`appsettings.json`)
-您可以在此檔案中配置 MQTT 伺服器與相關帳密。
+您可以在此檔案中配置 MQTT 伺服器與本地 AI 模型資訊：
+
+```json
+{
+  "Mqtt": {
+    "Host": "broker.emqx.io",
+    "Port": 1883,
+    "Username": "your_user",
+    "Password": "your_password"
+  },
+  "Ai": {
+    "Endpoint": "http://127.0.0.1:1234/v1",
+    "Model": "local-model",
+    "ApiKey": "lm-studio"
+  }
+}
+```
 
 ### 景點資訊配置 (`scenes.json`)
-為了方便維護，所有校園景點資訊已從程式碼中獨立出來。
+為了方便維護，所有校園景點資訊已從程式碼中獨立出來。您可以直接修改此檔案來新增或修改景點。
 
 ### 系統需求
 - **.NET 10.0 SDK (Windows)**。
-- **LM Studio**: 運行於本地 `1234` 埠口。
+- **LM Studio**: 運行於本地，預設為 `1234` 埠口。
 - **硬體**: 建議使用具備 Intel NPU 或 GPU 的電腦以獲得最佳辨識速度。
 - **自動下載**: 伺服器首次啟動時會自動下載 FFmpeg、Piper 引擎及語音模型。
 
@@ -67,8 +83,8 @@ JFVS AI Center 是一個基於 ASP.NET Core 10.0 的全方位 AI 整合伺服器
 
 - **`Whisper.net` & `Whisper.net.Runtime.OpenVino`**: 語音辨識與 OpenVINO 加速。
 - **`System.Speech`**: Windows SAPI TTS 支援。
-- **`OpenAI`**: 串接 LM Studio。
-- **`MQTTnet`**: MQTT 通訊。
+- **`OpenAI`**: 串接 OpenAI 相容 API (如 LM Studio)。
+- **`MQTTnet`**: 高效 MQTT 通訊。
 - **`Xabe.FFmpeg`**: 音訊轉碼處理。
 
 ## 📂 專案結構
@@ -76,5 +92,5 @@ JFVS AI Center 是一個基於 ASP.NET Core 10.0 的全方位 AI 整合伺服器
 - `JFVS_AI_Center.Api/`
   - `Services/`: 核心服務 (AI, MQTT, Scene, Whisper, Piper TTS, SAPI TTS)。
   - `Piper/`: Piper 引擎與模型存放目錄（自動生成）。
-  - `Models/`: 資料模型與資料夾。
+  - `Models/`: 資料模型與 Options 類別。
   - `scenes.json`: 景點資料庫。

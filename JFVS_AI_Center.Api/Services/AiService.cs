@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using JFVS_AI_Center.Api.Models;
+using Microsoft.Extensions.Options;
 
 namespace JFVS_AI_Center.Api.Services;
 
@@ -26,19 +27,24 @@ public class AiService : IAiService
 介紹景點時請使用 get_scene_info 工具，且擷取最相關的一兩句話回答，不要給太多資料。
 回覆時不要提到具體校名與地名，使用籠統稱呼即可。";
 
-    public AiService(IMqttService mqttService, ISceneService sceneService, ILogger<AiService> logger)
+    public AiService(
+        IMqttService mqttService, 
+        ISceneService sceneService, 
+        ILogger<AiService> logger,
+        IOptions<AiOptions> aiOptions)
     {
         _mqttService = mqttService;
         _sceneService = sceneService;
         _logger = logger;
 
-        // LM Studio local endpoint
-        var clientOptions = new OpenAI.OpenAIClientOptions();
-        var openAiClient = new OpenAI.OpenAIClient(new System.ClientModel.ApiKeyCredential("lm-studio"), new OpenAI.OpenAIClientOptions
-        {
-            Endpoint = new Uri("http://127.0.0.1:1234/v1")
-        });
-        _client = openAiClient.GetChatClient("local-model");
+        var options = aiOptions.Value;
+        
+        // Use settings from appsettings.json
+        var openAiClient = new OpenAI.OpenAIClient(
+            new System.ClientModel.ApiKeyCredential(options.ApiKey), 
+            new OpenAI.OpenAIClientOptions { Endpoint = new Uri(options.Endpoint) }
+        );
+        _client = openAiClient.GetChatClient(options.Model);
     }
 
     private ChatSession GetOrCreateSession(string sessionId)
