@@ -9,17 +9,17 @@ namespace JFVS_AI_Center.Api.Infrastructure;
 public class WhisperInferenceService : IDisposable
 {
     private readonly WhisperFactory _factory;
-    private readonly ModelManagerService _modelManager;
+    private readonly ModelPathProvider _pathProvider;
     private readonly ILogger<WhisperInferenceService> _logger;
     private string? _detectedDevice;
 
-    public WhisperInferenceService(ModelManagerService modelManager, ILogger<WhisperInferenceService> logger)
+    public WhisperInferenceService(ModelPathProvider pathProvider, ILogger<WhisperInferenceService> logger)
     {
-        ArgumentNullException.ThrowIfNull(modelManager);
+        ArgumentNullException.ThrowIfNull(pathProvider);
         ArgumentNullException.ThrowIfNull(logger);
-        _modelManager = modelManager;
+        _pathProvider = pathProvider;
         _logger = logger;
-        _factory = WhisperFactory.FromPath(_modelManager.GetModelPath());
+        _factory = WhisperFactory.FromPath(_pathProvider.WhisperModelPath);
     }
 
     public async Task<string> TranscribeAsync(string wavPath, CancellationToken ct)
@@ -31,7 +31,7 @@ public class WhisperInferenceService : IDisposable
         {
             using var processor = _factory.CreateBuilder()
                 .WithLanguage("zh")
-                .WithOpenVinoEncoder(_modelManager.GetOpenVinoXmlPath(), device, null)
+                .WithOpenVinoEncoder(_pathProvider.WhisperOpenVinoXmlPath, device, null)
                 .Build();
 
             using var fileStream = File.OpenRead(wavPath);
@@ -77,7 +77,7 @@ public class WhisperInferenceService : IDisposable
             {
                 _logger.LogInformation("正在嘗試傳統探測 OpenVINO 裝置: {Device}...", device);
                 using var testProcessor = _factory.CreateBuilder()
-                    .WithOpenVinoEncoder(_modelManager.GetOpenVinoXmlPath(), device, null)
+                    .WithOpenVinoEncoder(_pathProvider.WhisperOpenVinoXmlPath, device, null)
                     .Build();
                 
                 _detectedDevice = device;

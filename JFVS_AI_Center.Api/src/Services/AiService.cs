@@ -21,7 +21,7 @@ public interface IAiService
 /// </summary>
 public class AiService : IAiService
 {
-    private readonly IMqttService _mqttService;
+    private readonly IDeviceControlService _deviceControlService;
     private readonly ISceneService _sceneService;
     private readonly ILogger<AiService> _logger;
     private readonly ChatClient _client;
@@ -36,17 +36,17 @@ public class AiService : IAiService
 **回覆時嚴禁使用 Emoji 或任何特殊表情符號。**";
 
     public AiService(
-        IMqttService mqttService, 
+        IDeviceControlService deviceControlService, 
         ISceneService sceneService, 
         ILogger<AiService> logger,
         IOptions<AiOptions> aiOptions)
     {
-        ArgumentNullException.ThrowIfNull(mqttService);
+        ArgumentNullException.ThrowIfNull(deviceControlService);
         ArgumentNullException.ThrowIfNull(sceneService);
         ArgumentNullException.ThrowIfNull(logger);
         ArgumentNullException.ThrowIfNull(aiOptions);
 
-        _mqttService = mqttService;
+        _deviceControlService = deviceControlService;
         _sceneService = sceneService;
         _logger = logger;
 
@@ -144,7 +144,7 @@ public class AiService : IAiService
                     using var doc = JsonDocument.Parse(toolCall.FunctionArguments);
                     var deviceName = doc.RootElement.GetProperty("device_name").GetString() ?? "";
                     var action = doc.RootElement.GetProperty("action").GetString() ?? "";
-                    result = await _mqttService.ControlDeviceAsync(deviceName, action);
+                    result = await _deviceControlService.ControlDeviceAsync(deviceName, action);
                 }
 
                 session.AddMessage(ChatMessage.CreateToolMessage(toolCall.Id, result));
@@ -213,7 +213,7 @@ public class AiService : IAiService
 
     private async Task BackgroundDeviceTask(string sessionId, string device, string action, string userText, string fastReply)
     {
-        await _mqttService.ControlDeviceAsync(device, action);
+        await _deviceControlService.ControlDeviceAsync(device, action);
         try
         {
             await Task.Delay(1000);

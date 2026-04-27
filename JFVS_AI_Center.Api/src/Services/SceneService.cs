@@ -1,6 +1,5 @@
 namespace JFVS_AI_Center.Api.Services;
 
-using System.Text.Json;
 using JFVS_AI_Center.Api.Models;
 
 /// <summary>
@@ -12,58 +11,26 @@ public interface ISceneService
 }
 
 /// <summary>
-/// 景點服務實作
+/// 景點服務實作，專注於查詢與配對邏輯。
 /// </summary>
 public class SceneService : ISceneService
 {
-    private readonly List<SceneItem> _scenes = [];
+    private readonly ISceneRepository _repository;
     private readonly ILogger<SceneService> _logger;
 
-    public SceneService(ILogger<SceneService> logger)
+    public SceneService(ISceneRepository repository, ILogger<SceneService> logger)
     {
-        ArgumentNullException.ThrowIfNull(logger);
-        _logger = logger;
-        LoadScenes();
-    }
-
-    private void LoadScenes()
-    {
-        try
-        {
-            var filePath = Path.Combine(AppContext.BaseDirectory, "scenes.json");
-            
-            if (!File.Exists(filePath))
-            {
-                filePath = "scenes.json";
-            }
-
-            if (File.Exists(filePath))
-            {
-                var json = File.ReadAllText(filePath);
-                var items = JsonSerializer.Deserialize<List<SceneItem>>(json);
-                if (items != null)
-                {
-                    _scenes.AddRange(items);
-                    _logger.LogInformation("已載入 {Count} 個景點資訊。", _scenes.Count);
-                }
-            }
-            else
-            {
-                _logger.LogWarning("找不到景點資訊檔案: {Path}", filePath);
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "載入景點資訊時發生錯誤。");
-        }
+        _repository = repository ?? throw new ArgumentNullException(nameof(repository));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     public string GetSceneInfo(string sceneName)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sceneName);
-        _logger.LogInformation("[MCP 工具觸發] 正在查詢: {SceneName}", sceneName);
+        _logger.LogInformation("[景點查詢] 正在查詢: {SceneName}", sceneName);
 
-        var match = _scenes.FirstOrDefault(s => s.Keywords.Any(sceneName.Contains));
+        var scenes = _repository.GetScenes();
+        var match = scenes.FirstOrDefault(s => s.Keywords.Any(sceneName.Contains));
 
         if (match != null)
         {

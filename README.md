@@ -7,8 +7,8 @@ JFVS AI Center 是一個基於 **.NET 10.0** 與 **C# 14** 構建的全方位 AI
 本專案採用解耦的領域驅動設計 (DDD) 概念，結構如下：
 
 - **Web (src/Web)**：基於 Minimal API 的高效能進入點，負責路由配置、Scalar UI 整合。
-- **Services (src/Services)**：核心業務邏輯層，包含 AI 對話流程控管與情境劇本服務。
-- **Infrastructure (src/Infrastructure)**：技術基礎建設層，處理 MQTT 通訊、OpenVINO 裝置偵測、Whisper 推論、Piper 語音合成及 FFmpeg 音訊轉碼。
+- **Services (src/Services)**：核心業務邏輯層，包含 AI 對話流程控管 (`AiService`)、設備控制邏輯 (`DeviceControlService`) 與景點資訊服務 (`SceneService`)。
+- **Infrastructure (src/Infrastructure)**：技術基礎建設層，處理底層 MQTT 通訊 (`MqttClientService`)、OpenVINO 裝置偵測、Whisper 推論、Piper 語音合成及環境檢查 (`ModelManagerService`)。
 - **Models (src/Models)**：採用 C# Record 實作的不可變資料模型與 DTO。
 
 ## 🚀 核心功能
@@ -16,7 +16,7 @@ JFVS AI Center 是一個基於 **.NET 10.0** 與 **C# 14** 構建的全方位 AI
 - **AI 智能聊天 (`POST /chat`)**
   - **多 Session 管理**：支援按 `SessionId` 獨立維護對話紀錄，確保多用戶平行使用的上下文隔離。
   - **本地大腦**：完美串接 LM Studio (OpenAI 相容 API)，確保所有對話數據均保留在校園內部。
-  - **工具呼叫 (Tool Calling)**：AI 具備自主決策能力，能自動呼叫景點資訊查詢與實體設備控制。
+  - **工具呼叫 (Tool Calling)**：AI 具備自主決策能力，透過 `DeviceControlService` 與 `SceneService` 自動執行任務。
   - **智能清掃**：內建對話歷史限制，自動優化 Context 視窗以節省運算資源。
 
 - **語音辨識 (STT) (`POST /api/transcribe`)**
@@ -24,7 +24,7 @@ JFVS AI Center 是一個基於 **.NET 10.0** 與 **C# 14** 構建的全方位 AI
   - **自適應轉碼**：內建 `AudioConversionService` 搭配 FFmpeg，自動將上傳的音訊轉換為 16kHz, 16-bit PCM 格式。
 
 - **高品質語音合成 (TTS) (`GET /api/tts`)**
-  - **Piper 引擎**：整合官方 Piper 離線 TTS，提供低延遲、高質感的中文女聲。
+  - **Piper 引擎**：整合官方 Piper 離線 TTS，並透過 `AudioFormatUtils` 提供低延遲、高質感的 WAV 音訊。
   - **多引擎支援**：除了 Piper，亦保留了 Windows SAPI TTS 接口，適應不同情境需求。
 
 - **全本機語音對話 (`POST /api/voice-chat`)**
@@ -32,7 +32,7 @@ JFVS AI Center 是一個基於 **.NET 10.0** 與 **C# 14** 構建的全方位 AI
 
 - **物聯網控制 (IoT Control)**
   - **意圖預判**：內建 `FastIntentMatcher` 靜態純函數，在進入大腦推論前快速識別簡單的開關指令。
-  - **強健連線**：基於 MQTTnet 實作的長連線服務，具備自動重連與斷線緩衝。
+  - **職責分離**：業務邏輯 (`DeviceControlService`) 與底層通訊 (`MqttClientService`) 完全解耦，具備自動重連與斷線緩衝。
 
 ## 🛠️ 開發環境需求
 

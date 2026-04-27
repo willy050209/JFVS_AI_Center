@@ -33,12 +33,13 @@
   * **跨行程通訊 (IPC) 封裝**：Piper 是一個獨立的執行檔 (.exe)。我們透過 Process 啟動它，將要念的文字寫入標準輸入 (stdin)，然後即時從標準輸出 (stdout) 讀取生成的裸音訊資料 (Raw PCM)。  
   * **音訊封裝算法**：因為 Piper 產出的是沒有檔頭的波形數據，程式中實作了二進位寫入邏輯，手動計算並補上標準的 WAV (RIFF) Header，讓前端瀏覽器可以直接播放。
 
-### **4\. 物聯網神經：MQTT 設備控制 (MqttService)**
+### **4\. 物聯網神經：MQTT 設備控制 (DeviceControlService & MqttClientService)**
 
-* **技術核心**：**MQTT (輕量級發布/訂閱協定)**。  
+* **技術核心**：**MQTT (輕量級發布/訂閱協定)** 與 **職責分離原則**。  
 * **設計邏輯**：  
-  * **背景長連線**：IoT 控制不能每次呼叫 API 才連線。我們將其設計為背景常駐服務 (IHostedService)，伺服器啟動時即連線並保持。  
-  * **斷線重連機制**：網路不穩時，透過監聽斷線事件，利用 Task.Delay 實現無窮迴圈的自動重連 (Auto-Reconnect)。
+  * **底層通訊層 (MqttClientService)**：負責純粹的 MQTT 連線、斷線重連與訊息發布。這是一個背景長連線服務 (IHostedService)，伺服器啟動時即連線並保持，具備自動重連機制。
+  * **業務控制層 (DeviceControlService)**：負責處理設備對應邏輯（例如將「燈」對應到特定 Topic）與動作解析，並決定回饋給使用者的文字。
+  * **優點**：當你想換成不同的 MQTT Broker 或甚至是改用 HTTP 控制時，你只需要修改或替換底層通訊層，而不需要動到 AI 工具呼叫的業務邏輯。
 
 ## **第二部分：Python 生態系替代方案對照表**
 
@@ -50,8 +51,8 @@
 | **LLM 串接** | OpenAI 官方 SDK | **openai** (Python) 或 **LangChain** | 直接使用 Python 版 openai 套件即可無縫連接 LM Studio。 |
 | **對話狀態** | ConcurrentDictionary | 內建 **dict** \+ **asyncio.Lock()** | FastAPI 底層是非同步事件迴圈，若涉及多併發寫入，請記得加上非同步鎖。 |
 | **語音轉文字** | Whisper.net \+ OpenVINO | **faster-whisper** | 基於 CTranslate2，效能極高。若需 Intel 顯卡加速，可改用 openvino-whisper。 |
-| **文字轉語音** | Piper TTS (.exe) \+ SAPI | **piper-tts** \+ **pyttsx3** | Piper 有官方的 Python package，不需要像 C\# 那樣辛苦處理 IPC 和 WAV Header。 |
-| **MQTT 通訊** | MQTTnet | **aiomqtt** (或 paho-mqtt) | 推薦 aiomqtt，完美整合 Python asyncio，輕鬆實現背景非同步長連線。 |
+| **文字轉語音** | Piper TTS (.exe) \+ Utils | **piper-tts** \+ **pyttsx3** | Piper 有官方的 Python package，不需要像 C\# 那樣辛苦處理 IPC 和 WAV Header。 |
+| **MQTT 通訊** | MQTTnet | **aiomqtt** (或 paho-mqtt) | 推薦 aiomqtt，完美整合 Python asyncio。建議也採解耦設計：一個 Class 跑 Client，一個 Class 跑 Logic。 |
 | **音訊轉檔** | Xabe.FFmpeg | **ffmpeg-python** 或 **pydub** | pydub 處理極簡：AudioSegment.from\_file().set\_frame\_rate(16000).export() |
 | **背景服務** | IHostedService | **FastAPI @app.lifespan** | 在 FastAPI lifespan 中啟動 MQTT 連線，關閉時斷線，行為等同 C\#。 |
 

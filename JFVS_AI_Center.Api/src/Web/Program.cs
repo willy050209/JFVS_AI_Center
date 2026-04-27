@@ -25,13 +25,17 @@ builder.Services.AddOpenApi(options =>
     });
 });
 
-builder.Services.AddSingleton<MqttService>();
-builder.Services.AddSingleton<IMqttService>(sp => sp.GetRequiredService<MqttService>());
-builder.Services.AddHostedService(sp => sp.GetRequiredService<MqttService>());
+builder.Services.AddSingleton<MqttClientService>();
+builder.Services.AddSingleton<IMqttClientService>(sp => sp.GetRequiredService<MqttClientService>());
+builder.Services.AddHostedService(sp => sp.GetRequiredService<MqttClientService>());
 
+builder.Services.AddSingleton<IDeviceControlService, DeviceControlService>();
+builder.Services.AddSingleton<ISceneRepository, JsonSceneRepository>();
 builder.Services.AddSingleton<ISceneService, SceneService>();
 builder.Services.AddSingleton<IAiService, AiService>();
 
+builder.Services.AddSingleton<ModelPathProvider>();
+builder.Services.AddSingleton<IFileDownloadService, FileDownloadService>();
 builder.Services.AddSingleton<ModelManagerService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<ModelManagerService>());
 builder.Services.AddTransient<AudioConversionService>();

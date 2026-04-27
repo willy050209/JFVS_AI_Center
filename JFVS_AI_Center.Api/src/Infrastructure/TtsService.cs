@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text;
+using JFVS_AI_Center.Api.Infrastructure.Utils;
 
 namespace JFVS_AI_Center.Api.Infrastructure;
 
@@ -10,14 +11,14 @@ public interface ITtsService
 
 public class TtsService : ITtsService
 {
-    private readonly ModelManagerService _modelManager;
+    private readonly ModelPathProvider _pathProvider;
     private readonly ILogger<TtsService> _logger;
 
-    public TtsService(ModelManagerService modelManager, ILogger<TtsService> logger)
+    public TtsService(ModelPathProvider pathProvider, ILogger<TtsService> logger)
     {
-        ArgumentNullException.ThrowIfNull(modelManager);
+        ArgumentNullException.ThrowIfNull(pathProvider);
         ArgumentNullException.ThrowIfNull(logger);
-        _modelManager = modelManager;
+        _pathProvider = pathProvider;
         _logger = logger;
     }
 
@@ -25,8 +26,8 @@ public class TtsService : ITtsService
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(text);
 
-        var piperExe = _modelManager.GetPiperExePath();
-        var modelPath = _modelManager.GetPiperModelPath();
+        var piperExe = _pathProvider.PiperExePath;
+        var modelPath = _pathProvider.PiperModelPath;
 
         if (!File.Exists(piperExe) || !File.Exists(modelPath))
         {
@@ -66,33 +67,8 @@ public class TtsService : ITtsService
         }
 
         int sampleRate = 22050; 
-        
         var rawData = ms.ToArray();
-        return CreateWavWithHeader(rawData, sampleRate);
-    }
-
-    private static byte[] CreateWavWithHeader(byte[] pcmData, int sampleRate)
-    {
-        using var ms = new MemoryStream();
-        using var bw = new BinaryWriter(ms);
-
-        bw.Write("RIFF"u8.ToArray());
-        bw.Write(36 + pcmData.Length);
-        bw.Write("WAVE"u8.ToArray());
-
-        bw.Write("fmt "u8.ToArray());
-        bw.Write(16); 
-        bw.Write((short)1); 
-        bw.Write((short)1); 
-        bw.Write(sampleRate); 
-        bw.Write(sampleRate * 2); 
-        bw.Write((short)2); 
-        bw.Write((short)16); 
-
-        bw.Write("data"u8.ToArray());
-        bw.Write(pcmData.Length);
-        bw.Write(pcmData);
-
-        return ms.ToArray();
+        
+        return AudioFormatUtils.CreateWavWithHeader(rawData, sampleRate);
     }
 }
