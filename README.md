@@ -1,50 +1,56 @@
 # JFVS AI Center
 
-JFVS AI Center 是一個基於 ASP.NET Core 10.0 的全方位 AI 整合伺服器，專為技術型高中設計，整合了大型語言模型 (LLM) 對話、物聯網 (MQTT) 設備控制、OpenVINO 加速的語音轉文字 (STT) 以及高品質本機語音合成 (TTS) 功能。
+JFVS AI Center 是一個基於 **.NET 10.0** 與 **C# 14** 構建的全方位 AI 整合伺服器。本專案專為技術型高中設計，採用現代化架構，整合了大型語言模型 (LLM) 對話、物聯網 (MQTT) 設備控制、OpenVINO 加速的語音轉文字 (STT) 以及高品質本機語音合成 (TTS) 功能。
+
+## 🏗️ 系統架構
+
+本專案採用解耦的領域驅動設計 (DDD) 概念，結構如下：
+
+- **Web (src/Web)**：基於 Minimal API 的高效能進入點，負責路由配置、Swagger 整合及 Docker 配置。
+- **Services (src/Services)**：核心業務邏輯層，包含 AI 對話流程控管與情境劇本服務。
+- **Infrastructure (src/Infrastructure)**：技術基礎建設層，處理 MQTT 通訊、OpenVINO 裝置偵測、Whisper 推論、Piper 語音合成及 FFmpeg 音訊轉碼。
+- **Models (src/Models)**：採用 C# Record 實作的不可變資料模型與 DTO。
 
 ## 🚀 核心功能
 
 - **AI 智能聊天 (`POST /chat`)**
-  - **多 Session 管理**：支援按 `SessionId` 獨立維護對話紀錄，適合多用戶同時使用。
-  - **本地大腦**：串接 LM Studio (支援 OpenAI 相容 API)，保護數據隱私。
-  - **工具呼叫 (Tool Calling)**：AI 能自動判斷並呼叫「景點查詢」與「設備控制」工具。
-  - **歷史紀錄管理**：自動維護對話脈絡，並具備長度限制以優化 Token 使用。
+  - **多 Session 管理**：支援按 `SessionId` 獨立維護對話紀錄，確保多用戶平行使用的上下文隔離。
+  - **本地大腦**：完美串接 LM Studio (OpenAI 相容 API)，確保所有對話數據均保留在校園內部。
+  - **工具呼叫 (Tool Calling)**：AI 具備自主決策能力，能自動呼叫景點資訊查詢與實體設備控制。
+  - **智能清掃**：內建對話歷史限制，自動優化 Context 視窗以節省運算資源。
 
-- **語音轉文字 (`POST /api/transcribe`)**
-  - **高效推論**：整合 Whisper.net，並利用 OpenVINO™ 加速。
-  - **硬體適應**：自動偵測並選用最佳裝置 (優先順序：NPU > GPU > CPU)。
-  - **自動轉碼**：內建 FFmpeg 自動下載與整合，支援多種音訊格式自動轉為 16kHz WAV。
+- **語音辨識 (STT) (`POST /api/transcribe`)**
+  - **OpenVINO™ 加速**：利用 Intel 推論引擎優化 Whisper 模型，支援 NPU、GPU 與 CPU 自動切換。
+  - **自適應轉碼**：內建 `AudioConversionService` 搭配 FFmpeg，自動將上傳的音訊轉換為 16kHz, 16-bit PCM 格式。
 
-- **高品質本機 TTS (`GET /api/tts`)**
-  - **完全離線**：基於 Piper TTS 引擎，不需網路連接即可生成高品質語音。
-  - **優質語音**：預載 `zh_CN-huayan-medium` 模型，提供自然流暢的中文女聲（支援繁體輸入）。
-  - **自動部署**：系統啟動時會自動下載 Piper 引擎與模型檔案。
+- **高品質語音合成 (TTS) (`GET /api/tts`)**
+  - **Piper 引擎**：整合官方 Piper 離線 TTS，提供低延遲、高質感的中文女聲。
+  - **多引擎支援**：除了 Piper，亦保留了 Windows SAPI TTS 接口，適應不同情境需求。
 
-- **Windows SAPI TTS (`GET /api/tts-sapi`)**
-  - **零依賴**：使用 Windows 系統內建的 Speech API，無需額外模型。
-  - **極速回應**：適合簡單的系統通知與輕量級應用。
+- **全本機語音對話 (`POST /api/voice-chat`)**
+  - **一站式交互**：在單次請求中完成「語音辨識 -> AI 思考 -> 語音合成」完整流程，回傳 Base64 音訊數據。
 
-- **超低延遲語音對話 (`POST /api/voice-chat`)**
-  - **一條龍整合**：結合 STT、AI 聊天與 Piper TTS，實現全本機的語音互動流程。
-  - **低延遲優化**：Whisper 固定中文模式並使用 Greedy Decoding，確保辨識速度。
-  - **Base64 回傳**：結果直接以 Base64 編碼隨 JSON 回傳，方便前端即時播放。
+- **物聯網控制 (IoT Control)**
+  - **意圖預判**：內建 `FastIntentMatcher` 靜態純函數，在進入大腦推論前快速識別簡單的開關指令。
+  - **強健連線**：基於 MQTTnet 實作的長連線服務，具備自動重連與斷線緩衝。
 
-- **物聯網設備控制**
-  - **進階捷徑模式 (Fast Matcher)**：針對設備控制指令進行快速攔截，具備否定詞偵測。
-  - **MQTT 整合**：採用單一長連線模式，內建自動重連機制。
+## 🛠️ 開發環境需求
 
-## 🛠️ 系統配置與自訂
+- **.NET 10.0 SDK** (或更高版本)。
+- **Docker** (選配，用於容器化部署)。
+- **LM Studio**：建議運行於本地 1234 埠口。
+- **硬體推薦**：支援 Intel OpenVINO 的處理器或具備專屬 NPU 的設備。
+
+## ⚙️ 配置說明
 
 ### 核心設定 (`appsettings.json`)
-您可以在此檔案中配置 MQTT 伺服器與本地 AI 模型資訊：
-
 ```json
 {
   "Mqtt": {
     "Host": "broker.emqx.io",
     "Port": 1883,
-    "Username": "your_user",
-    "Password": "your_password"
+    "Username": "",
+    "Password": ""
   },
   "Ai": {
     "Endpoint": "http://127.0.0.1:1234/v1",
@@ -54,43 +60,25 @@ JFVS AI Center 是一個基於 ASP.NET Core 10.0 的全方位 AI 整合伺服器
 }
 ```
 
-### 景點資訊配置 (`scenes.json`)
-為了方便維護，所有校園景點資訊已從程式碼中獨立出來。您可以直接修改此檔案來新增或修改景點。
-
-### 系統需求
-- **.NET 10.0 SDK (Windows)**。
-- **LM Studio**: 運行於本地，預設為 `1234` 埠口。
-- **硬體**: 建議使用具備 Intel NPU 或 GPU 的電腦以獲得最佳辨識速度。
-- **自動下載**: 伺服器首次啟動時會自動下載 FFmpeg、Piper 引擎及語音模型。
-
 ## 🏁 快速開始
 
-1. **環境準備**：確保 LM Studio 已啟動並載入模型。
-2. **啟動伺服器**：
+1. **編譯專案**：
    ```powershell
-   cd JFVS_AI_Center.Api
-   dotnet run
+   dotnet build
    ```
-3. **API 測試**：
-   - 瀏覽器打開 `http://localhost:5000/swagger` 即可進入測試介面。
-   - **聊天**: `POST /chat`
-   - **STT**: `POST /api/transcribe` (Multipart Form Data)
-   - **Piper TTS**: `GET /api/tts?text=你好`
-   - **SAPI TTS**: `GET /api/tts-sapi?text=你好`
-   - **整合對話**: `POST /api/voice-chat` (Multipart Form Data)
+2. **執行伺服器**：
+   ```powershell
+   dotnet run --project JFVS_AI_Center.Api/JFVS_AI_Center.Api.csproj
+   ```
+3. **存取 Swagger UI**：
+   打開瀏覽器至 `http://localhost:5000/swagger`
 
-## 📦 主要使用的 NuGet 套件
+## 📦 技術棧
 
-- **`Whisper.net` & `Whisper.net.Runtime.OpenVino`**: 語音辨識與 OpenVINO 加速。
-- **`System.Speech`**: Windows SAPI TTS 支援。
-- **`OpenAI`**: 串接 OpenAI 相容 API (如 LM Studio)。
-- **`MQTTnet`**: 高效 MQTT 通訊。
-- **`Xabe.FFmpeg`**: 音訊轉碼處理。
+- **Runtime**: .NET 10.0 (Win-x64)
+- **Framework**: ASP.NET Core Minimal API
+- **AI/ML**: Whisper.net, OpenVINO, Piper TTS
+- **Communication**: MQTTnet
+- **Media**: Xabe.FFmpeg
 
-## 📂 專案結構
 
-- `JFVS_AI_Center.Api/`
-  - `Services/`: 核心服務 (AI, MQTT, Scene, Whisper, Piper TTS, SAPI TTS)。
-  - `Piper/`: Piper 引擎與模型存放目錄（自動生成）。
-  - `Models/`: 資料模型與 Options 類別。
-  - `scenes.json`: 景點資料庫。

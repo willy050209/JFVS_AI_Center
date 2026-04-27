@@ -4,24 +4,41 @@ using System.IO;
 
 namespace JFVS_AI_Center.Api.Infrastructure;
 
+/// <summary>
+/// Windows SAPI 語音合成服務介面
+/// </summary>
 public interface ISapiTtsService
 {
     Task<byte[]> SynthesizeAsync(string text);
 }
 
+/// <summary>
+/// Windows SAPI 語音合成服務實作
+/// <remarks>警告：此服務在 Windows 容器環境下通常無法運作，請優先使用基於 Piper 的 TtsService。</remarks>
+/// </summary>
 public class SapiTtsService : ISapiTtsService
 {
     private readonly ILogger<SapiTtsService> _logger;
+    private readonly bool _isRunningInContainer;
 
     public SapiTtsService(ILogger<SapiTtsService> logger)
     {
         ArgumentNullException.ThrowIfNull(logger);
         _logger = logger;
+        
+        // 偵測是否運行於容器環境
+        _isRunningInContainer = Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER") == "true";
     }
 
     public Task<byte[]> SynthesizeAsync(string text)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(text);
+
+        if (_isRunningInContainer)
+        {
+            _logger.LogError("偵測到處於容器環境，Windows SAPI (System.Speech) 無法運作。請改用 /api/tts (Piper)。");
+            throw new PlatformNotSupportedException("Windows SAPI 在容器環境下不被支援，請改用 Piper TTS 服務。");
+        }
 
         return Task.Run(() =>
         {
@@ -57,7 +74,7 @@ public class SapiTtsService : ISapiTtsService
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "SAPI 內部發生錯誤");
+                _logger.LogError(ex, "SAPI 內部發生錯誤 (可能缺少語音引擎或音訊設備)");
                 throw;
             }
         });

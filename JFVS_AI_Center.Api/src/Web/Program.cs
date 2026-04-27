@@ -205,6 +205,11 @@ app.MapGet("/api/tts-sapi", async Task<Results<FileContentHttpResult, BadRequest
         var audioBytes = await sapiService.SynthesizeAsync(text);
         return TypedResults.File(audioBytes, "audio/wav", $"sapi_{Guid.NewGuid():N}.wav");
     }
+    catch (PlatformNotSupportedException ex)
+    {
+        logger.LogWarning(ex, "SAPI 不支援容器環境");
+        return TypedResults.Problem("Windows SAPI 在容器環境下無法運作，請改用 /api/tts (Piper) 服務。");
+    }
     catch (Exception ex)
     {
         logger.LogError(ex, "SAPI TTS error");
