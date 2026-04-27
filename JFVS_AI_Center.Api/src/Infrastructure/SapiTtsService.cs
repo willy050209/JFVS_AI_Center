@@ -2,7 +2,7 @@ using System.Speech.Synthesis;
 using System.Speech.AudioFormat;
 using System.IO;
 
-namespace JFVS_AI_Center.Api.Services;
+namespace JFVS_AI_Center.Api.Infrastructure;
 
 public interface ISapiTtsService
 {
@@ -15,11 +15,14 @@ public class SapiTtsService : ISapiTtsService
 
     public SapiTtsService(ILogger<SapiTtsService> logger)
     {
+        ArgumentNullException.ThrowIfNull(logger);
         _logger = logger;
     }
 
     public Task<byte[]> SynthesizeAsync(string text)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(text);
+
         return Task.Run(() =>
         {
             _logger.LogInformation("開始 SAPI 合成: {Text}", text);

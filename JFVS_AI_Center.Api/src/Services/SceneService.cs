@@ -1,20 +1,27 @@
+namespace JFVS_AI_Center.Api.Services;
+
 using System.Text.Json;
 using JFVS_AI_Center.Api.Models;
 
-namespace JFVS_AI_Center.Api.Services;
-
+/// <summary>
+/// 景點服務介面
+/// </summary>
 public interface ISceneService
 {
     string GetSceneInfo(string sceneName);
 }
 
+/// <summary>
+/// 景點服務實作
+/// </summary>
 public class SceneService : ISceneService
 {
-    private readonly List<SceneItem> _scenes = new();
+    private readonly List<SceneItem> _scenes = [];
     private readonly ILogger<SceneService> _logger;
 
     public SceneService(ILogger<SceneService> logger)
     {
+        ArgumentNullException.ThrowIfNull(logger);
         _logger = logger;
         LoadScenes();
     }
@@ -25,7 +32,6 @@ public class SceneService : ISceneService
         {
             var filePath = Path.Combine(AppContext.BaseDirectory, "scenes.json");
             
-            // 如果在開發環境，可能在專案根目錄
             if (!File.Exists(filePath))
             {
                 filePath = "scenes.json";
@@ -54,9 +60,10 @@ public class SceneService : ISceneService
 
     public string GetSceneInfo(string sceneName)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(sceneName);
         _logger.LogInformation("[MCP 工具觸發] 正在查詢: {SceneName}", sceneName);
 
-        var match = _scenes.FirstOrDefault(s => s.Keywords.Any(k => sceneName.Contains(k)));
+        var match = _scenes.FirstOrDefault(s => s.Keywords.Any(sceneName.Contains));
 
         if (match != null)
         {

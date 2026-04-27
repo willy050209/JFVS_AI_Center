@@ -1,8 +1,10 @@
 using System.Runtime.InteropServices;
-using System.Text;
 
-namespace JFVS_AI_Center.Api.Services;
+namespace JFVS_AI_Center.Api.Infrastructure;
 
+/// <summary>
+/// OpenVINO 裝置偵測器 (純靜態方法)
+/// </summary>
 public static class OpenVinoDeviceDetector
 {
     private const string DllName = "openvino_c";
@@ -61,7 +63,7 @@ public static class OpenVinoDeviceDetector
         }
         catch (Exception ex)
         {
-            logger?.LogError(ex, "探測 OpenVINO 裝置時發生例外狀況 (可能是缺少 DLL 或不支援的平台)");
+            logger?.LogError(ex, "探測 OpenVINO 裝置時發生例外狀況");
         }
         finally
         {

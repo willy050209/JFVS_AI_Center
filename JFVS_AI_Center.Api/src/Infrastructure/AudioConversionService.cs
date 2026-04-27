@@ -1,14 +1,17 @@
 using Xabe.FFmpeg;
 
-namespace JFVS_AI_Center.Api.Services;
+namespace JFVS_AI_Center.Api.Infrastructure;
 
 /// <summary>
-/// 負責將上傳的音訊檔案轉換為 Whisper 要求的 16kHz, 16-bit PCM WAV 格式。
+/// 音訊轉換服務
 /// </summary>
 public class AudioConversionService(ILogger<AudioConversionService> logger)
 {
     public async Task<string> ConvertToWavAsync(Stream inputStream, string extension, CancellationToken ct)
     {
+        ArgumentNullException.ThrowIfNull(inputStream);
+        ArgumentException.ThrowIfNullOrWhiteSpace(extension);
+
         var tempInput = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}{extension}");
         var tempOutput = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}.wav");
 
@@ -23,7 +26,6 @@ public class AudioConversionService(ILogger<AudioConversionService> logger)
 
             var mediaInfo = await FFmpeg.GetMediaInfo(tempInput, ct);
 
-            // 設定轉換參數：16kHz, 單聲道 (ac 1), 16-bit pcm (pcm_s16le)
             var conversion = FFmpeg.Conversions.New()
                 .AddStream(mediaInfo.Streams)
                 .SetOutput(tempOutput)

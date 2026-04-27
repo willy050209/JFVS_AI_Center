@@ -3,15 +3,22 @@ using System.Collections.Concurrent;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using JFVS_AI_Center.Api.Models;
+using JFVS_AI_Center.Api.Infrastructure;
 using Microsoft.Extensions.Options;
 
 namespace JFVS_AI_Center.Api.Services;
 
+/// <summary>
+/// AI 服務介面
+/// </summary>
 public interface IAiService
 {
     Task<string> ProcessChatAsync(string userText, string sessionId = "default");
 }
 
+/// <summary>
+/// AI 服務實作
+/// </summary>
 public class AiService : IAiService
 {
     private readonly IMqttService _mqttService;
@@ -34,13 +41,17 @@ public class AiService : IAiService
         ILogger<AiService> logger,
         IOptions<AiOptions> aiOptions)
     {
+        ArgumentNullException.ThrowIfNull(mqttService);
+        ArgumentNullException.ThrowIfNull(sceneService);
+        ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(aiOptions);
+
         _mqttService = mqttService;
         _sceneService = sceneService;
         _logger = logger;
 
         var options = aiOptions.Value;
         
-        // Use settings from appsettings.json
         var openAiClient = new OpenAI.OpenAIClient(
             new System.ClientModel.ApiKeyCredential(options.ApiKey), 
             new OpenAI.OpenAIClientOptions { Endpoint = new Uri(options.Endpoint) }
@@ -55,9 +66,10 @@ public class AiService : IAiService
 
     public async Task<string> ProcessChatAsync(string userText, string sessionId = "default")
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(userText);
+
         try
         {
-            // 1. 捷徑檢查
             var (device, action, fastReply) = FastIntentMatcher(userText);
             if (device != null && action != null && fastReply != null)
             {
@@ -79,8 +91,8 @@ public class AiService : IAiService
 
     private async Task<string> RunChatWithToolsAsync(ChatSession session)
     {
-        var tools = new List<ChatTool>
-        {
+        List<ChatTool> tools =
+        [
             ChatTool.CreateFunctionTool(
                 "get_scene_info",
                 "獲取學校景點的詳細資訊與即時狀態。",
@@ -104,7 +116,7 @@ public class AiService : IAiService
                     ""required"": [""device_name"", ""action""]
                 }")
             )
-        };
+        ];
 
         var options = new ChatCompletionOptions
         {
@@ -138,51 +150,48 @@ public class AiService : IAiService
                 session.AddMessage(ChatMessage.CreateToolMessage(toolCall.Id, result));
             }
 
-            // 第二次請求
             completion = await _client.CompleteChatAsync(session.Messages);
         }
 
         var finalReply = completion.Content[0].Text;
         session.AddMessage(ChatMessage.CreateAssistantMessage(finalReply));
 
-        // 清理文字 (移除 Emoji 與不適合語音合成的符號)
         finalReply = CleanTextForTts(finalReply);
         
         _logger.LogInformation("<< [Session: {SessionId}] [回傳]: {Reply}", session.SessionId, finalReply);
         return finalReply;
     }
 
-    private string CleanTextForTts(string text)
+    /// <summary>
+    /// 純函數：清理文字 (移除 Emoji 與不適合語音合成的符號)
+    /// </summary>
+    private static string CleanTextForTts(string text)
     {
         if (string.IsNullOrEmpty(text)) return text;
 
-        // 1. 移除 Markdown 符號與特殊括號
         text = Regex.Replace(text, @"[*#_~「」『』]", "");
-
-        // 2. 移除 Emoji (包含 Symbol/Other \p{So} 與 Surrogate Pairs \p{Cs})
         text = Regex.Replace(text, @"\p{So}|\p{Cs}", "");
-
-        // 3. 處理換行與多餘空白
         text = text.Replace("\n", " ").Replace("\r", " ");
         text = Regex.Replace(text, @"\s+", " ");
 
         return text.Trim();
     }
 
-    private (string? Device, string? Action, string? FastReply) FastIntentMatcher(string text)
+    /// <summary>
+    /// 純函數：意圖快速配對
+    /// </summary>
+    private static (string? Device, string? Action, string? FastReply) FastIntentMatcher(string text)
     {
-        // 簡單的否定詞檢查：如果動作關鍵字前方出現否定詞，則不觸發捷徑
-        var negations = new[] { "不", "別", "毋", "沒", "取消" };
+        string[] negations = ["不", "別", "毋", "沒", "取消"];
         
         bool IsPositive(string actionKey)
         {
-            int index = text.IndexOf(actionKey);
+            int index = text.IndexOf(actionKey, StringComparison.Ordinal);
             if (index <= 0) return index == 0;
             
-            // 檢查關鍵字前方 2 個字元
             int start = Math.Max(0, index - 2);
             var prefix = text.Substring(start, index - start);
-            return !negations.Any(n => prefix.Contains(n));
+            return !negations.Any(prefix.Contains);
         }
 
         if (text.Contains("風扇") || text.Contains("电扇"))
