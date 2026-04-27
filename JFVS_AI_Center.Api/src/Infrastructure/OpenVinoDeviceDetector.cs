@@ -75,4 +75,32 @@ public static class OpenVinoDeviceDetector
 
         return deviceList;
     }
+
+    /// <summary>
+    /// 根據優先順序 (NPU > GPU > CPU) 取得最佳可用裝置
+    /// </summary>
+    public static string? GetBestDevice(ILogger? logger = null)
+    {
+        try
+        {
+            var availableDevices = GetAvailableDevices(logger);
+            if (availableDevices.Count == 0) return null;
+
+            logger?.LogInformation("偵測到可用 OpenVINO 裝置: {Devices}", string.Join(", ", availableDevices));
+
+            string[] priorityPrefixes = ["NPU", "GPU", "CPU"];
+
+            return priorityPrefixes
+                .Select(prefix => availableDevices
+                    .Where(d => d.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                    .OrderByDescending(d => d)
+                    .FirstOrDefault())
+                .FirstOrDefault(d => d != null);
+        }
+        catch (Exception ex)
+        {
+            logger?.LogError(ex, "選擇最佳裝置時發生非預期錯誤");
+            return null;
+        }
+    }
 }

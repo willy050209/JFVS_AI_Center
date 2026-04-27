@@ -59,33 +59,9 @@ public class WhisperInferenceService : IDisposable
     {
         if (_detectedDevice != null) return _detectedDevice;
 
-        try
-        {
-            _logger.LogInformation("正在使用 OpenVINO C API 探測可用裝置...");
-            var availableDevices = OpenVinoDeviceDetector.GetAvailableDevices(_logger);
-            
-            if (availableDevices.Count != 0)
-			{
-				_logger.LogInformation("偵測到可用 OpenVINO 裝置: {Devices}", string.Join(", ", availableDevices));
-
-				string[] priorityPrefixes = ["NPU", "GPU", "CPU"];
-
-				_detectedDevice = priorityPrefixes
-					.Select(prefix => availableDevices
-						.Where(d => d.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-						.OrderByDescending(d => d)
-						.FirstOrDefault())
-					.FirstOrDefault(d => d != null);
-			}
-			else
-			{
-				_logger.LogWarning("未偵測到任何 OpenVINO 加速裝置，將使用預設探測邏輯。");
-			}
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "探測裝置時發生非預期錯誤");
-        }
+        // 1. 嘗試透過 OpenVINO C API 探測
+        _logger.LogInformation("正在探測 OpenVINO 最佳裝置...");
+        _detectedDevice = OpenVinoDeviceDetector.GetBestDevice(_logger);
 
         if (_detectedDevice != null)
         {
@@ -93,8 +69,8 @@ public class WhisperInferenceService : IDisposable
             return _detectedDevice;
         }
 
+        // 2. Fallback: 嘗試傳統探測 (針對 GPU)
         var devicesToTry = new[] { "GPU" };
-        
         foreach (var device in devicesToTry)
         {
             try
@@ -109,10 +85,11 @@ public class WhisperInferenceService : IDisposable
             }
             catch (Exception ex)
             {
-                _logger.LogWarning("裝置 {Device} 探測失敗: {Message}", device, ex.Message);
+                _logger.LogWarning("裝置 {Device} 傳統探測失敗: {Message}", device, ex.Message);
             }
         }
 
+        // 3. 最終 Fallback: CPU
         _logger.LogWarning("所有高效能裝置均不可用或探測失敗，使用 CPU 模式。");
         _detectedDevice = "CPU";
         return _detectedDevice;
