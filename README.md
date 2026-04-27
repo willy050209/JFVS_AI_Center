@@ -6,7 +6,7 @@ JFVS AI Center 是一個基於 **.NET 10.0** 與 **C# 14** 構建的全方位 AI
 
 本專案採用解耦的領域驅動設計 (DDD) 概念，結構如下：
 
-- **Web (src/Web)**：基於 Minimal API 的高效能進入點，負責路由配置、Swagger 整合及 Docker 配置。
+- **Web (src/Web)**：基於 Minimal API 的高效能進入點，負責路由配置、Swagger 整合。
 - **Services (src/Services)**：核心業務邏輯層，包含 AI 對話流程控管與情境劇本服務。
 - **Infrastructure (src/Infrastructure)**：技術基礎建設層，處理 MQTT 通訊、OpenVINO 裝置偵測、Whisper 推論、Piper 語音合成及 FFmpeg 音訊轉碼。
 - **Models (src/Models)**：採用 C# Record 實作的不可變資料模型與 DTO。
