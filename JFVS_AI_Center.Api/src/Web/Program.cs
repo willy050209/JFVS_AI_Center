@@ -1,6 +1,7 @@
 using System.Text.Encodings.Web;
 using System.Text.Unicode;
 using Microsoft.AspNetCore.Http.HttpResults;
+using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -13,10 +14,7 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 });
 
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen(c =>
-{
-    c.SwaggerDoc("v1", new() { Title = "JFVS AI Center API", Version = "v1" });
-});
+builder.Services.AddOpenApi();
 
 builder.Services.AddSingleton<MqttService>();
 builder.Services.AddSingleton<IMqttService>(sp => sp.GetRequiredService<MqttService>());
@@ -42,11 +40,11 @@ var app = builder.Build();
 app.UseDefaultFiles();
 app.UseStaticFiles();
 
-app.UseSwagger();
-app.UseSwaggerUI(c =>
+if (app.Environment.IsDevelopment())
 {
-    c.SwaggerEndpoint("/swagger/v1/swagger.json", "JFVS AI Center API v1");
-});
+    app.MapOpenApi();
+    app.MapScalarApiReference();
+}
 
 app.MapPost("/chat", async Task<Results<Ok<ChatResponse>, BadRequest<string>>> ([FromBody] ChatRequest request, [FromServices] IAiService aiService, ILogger<Program> logger) =>
 {
