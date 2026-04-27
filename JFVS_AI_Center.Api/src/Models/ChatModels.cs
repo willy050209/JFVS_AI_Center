@@ -1,4 +1,6 @@
 using OpenAI.Chat;
+using System.ComponentModel;
+using System.ComponentModel.DataAnnotations;
 
 namespace JFVS_AI_Center.Api.Models;
 
@@ -7,7 +9,17 @@ namespace JFVS_AI_Center.Api.Models;
 /// </summary>
 public record ChatRequest
 {
+    /// <summary>
+    /// 使用者輸入的對話文字內容
+    /// </summary>
+    [Required]
+    [DefaultValue("你好")]
     public string Text { get; init; } = string.Empty;
+
+    /// <summary>
+    /// 會話識別碼，用於維持連續對話的上下文。若不提供則使用 "default"
+    /// </summary>
+    [DefaultValue("default")]
     public string SessionId { get; init; } = "default";
 }
 
@@ -16,6 +28,9 @@ public record ChatRequest
 /// </summary>
 public record ChatResponse
 {
+    /// <summary>
+    /// AI 回傳的文字內容
+    /// </summary>
     public string Response { get; init; } = string.Empty;
 }
 

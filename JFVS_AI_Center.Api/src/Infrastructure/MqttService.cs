@@ -35,11 +35,17 @@ public class MqttService : IMqttService, IHostedService, IDisposable
         var factory = new MqttFactory();
         _mqttClient = factory.CreateMqttClient();
 
-        _mqttClientOptions = new MqttClientOptionsBuilder()
+        var mqttClientOptionsBuilder = new MqttClientOptionsBuilder()
             .WithTcpServer(_options.Host, _options.Port)
-            .WithCredentials(_options.Username, _options.Password)
-            .WithCleanSession()
-            .Build();
+            .WithClientId($"JFVS_AI_Center_{Guid.NewGuid():N}")
+            .WithCleanSession();
+
+        if (!string.IsNullOrWhiteSpace(_options.Username))
+        {
+            mqttClientOptionsBuilder.WithCredentials(_options.Username, _options.Password);
+        }
+
+        _mqttClientOptions = mqttClientOptionsBuilder.Build();
 
         _mqttClient.DisconnectedAsync += async e =>
         {

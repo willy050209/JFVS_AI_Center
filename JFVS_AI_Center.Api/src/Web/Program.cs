@@ -14,7 +14,16 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 });
 
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddOpenApi();
+builder.Services.AddOpenApi(options =>
+{
+    options.AddDocumentTransformer((document, context, cancellationToken) =>
+    {
+        document.Info.Title = "JFVS AI Center API";
+        document.Info.Version = "v1";
+        document.Info.Description = "這是一個整合 AI 聊天、語音辨識 (STT) 與語音合成 (TTS) 的校園智能中心 API。";
+        return Task.CompletedTask;
+    });
+});
 
 builder.Services.AddSingleton<MqttService>();
 builder.Services.AddSingleton<IMqttService>(sp => sp.GetRequiredService<MqttService>());
@@ -48,6 +57,7 @@ if (app.Environment.IsDevelopment())
 
 app.MapPost("/chat", async Task<Results<Ok<ChatResponse>, BadRequest<string>>> ([FromBody] ChatRequest request, [FromServices] IAiService aiService, ILogger<Program> logger) =>
 {
+    // ... 原有邏輯
     if (string.IsNullOrWhiteSpace(request.Text))
     {
         return TypedResults.Ok(new ChatResponse { Response = "請輸入對話內容" });
@@ -63,7 +73,9 @@ app.MapPost("/chat", async Task<Results<Ok<ChatResponse>, BadRequest<string>>> (
         logger.LogError(ex, "Chat error");
         return TypedResults.Ok(new ChatResponse { Response = "抱歉，目前連線似乎有點問題，請稍後再試。" });
     }
-});
+})
+.WithSummary("與 AI 進行文字對話")
+.WithDescription("傳送文字訊息給 AI，並根據 SessionId 維持對話上下文。");
 
 app.MapPost("/api/transcribe", async Task<Results<Ok<TranscriptionResponse>, BadRequest<string>, ProblemHttpResult>> (
     IFormFile file,
@@ -71,6 +83,7 @@ app.MapPost("/api/transcribe", async Task<Results<Ok<TranscriptionResponse>, Bad
     WhisperInferenceService whisperService,
     CancellationToken ct) =>
 {
+    // ... 原有邏輯
     if (file == null || file.Length == 0)
     {
         return TypedResults.BadRequest("請提供有效的音訊檔案");
@@ -103,7 +116,9 @@ app.MapPost("/api/transcribe", async Task<Results<Ok<TranscriptionResponse>, Bad
         }
     }
 })
-.DisableAntiforgery();
+.DisableAntiforgery()
+.WithSummary("語音辨識 (STT)")
+.WithDescription("上傳音訊檔案，使用 Whisper 模型將語音轉換為文字。");
 
 app.MapPost("/api/voice-chat", async Task<Results<Ok<VoiceChatResponse>, BadRequest<string>, ProblemHttpResult>> (
     IFormFile file,
@@ -115,6 +130,7 @@ app.MapPost("/api/voice-chat", async Task<Results<Ok<VoiceChatResponse>, BadRequ
     ILogger<Program> logger,
     CancellationToken ct) =>
 {
+    // ... 原有邏輯
     if (file == null || file.Length == 0)
     {
         return TypedResults.BadRequest("請提供有效的音訊檔案");
@@ -162,7 +178,9 @@ app.MapPost("/api/voice-chat", async Task<Results<Ok<VoiceChatResponse>, BadRequ
         }
     }
 })
-.DisableAntiforgery();
+.DisableAntiforgery()
+.WithSummary("一站式語音對話")
+.WithDescription("上傳語音後，系統會自動辨識、思考並回傳 AI 的語音回覆 (Base64)。");
 
 app.MapGet("/api/tts", async Task<Results<FileContentHttpResult, BadRequest<string>, ProblemHttpResult>> (
     [FromQuery] string text,
@@ -171,6 +189,7 @@ app.MapGet("/api/tts", async Task<Results<FileContentHttpResult, BadRequest<stri
     ILogger<Program> logger,
     CancellationToken ct) =>
 {
+    // ... 原有邏輯
     if (string.IsNullOrWhiteSpace(text))
     {
         return TypedResults.BadRequest("請提供需要合成的文字");
@@ -186,13 +205,16 @@ app.MapGet("/api/tts", async Task<Results<FileContentHttpResult, BadRequest<stri
         logger.LogError(ex, "TTS Standalone error");
         return TypedResults.Problem($"語音合成失敗: {ex.Message}");
     }
-});
+})
+.WithSummary("語音合成 (TTS) - Piper")
+.WithDescription("將文字轉換為語音檔案 (WAV)，使用本機 Piper 引擎。");
 
 app.MapGet("/api/tts-sapi", async Task<Results<FileContentHttpResult, BadRequest<string>, ProblemHttpResult>> (
     [FromQuery] string text,
     ISapiTtsService sapiService,
     ILogger<Program> logger) =>
 {
+    // ... 原有邏輯
     if (string.IsNullOrWhiteSpace(text))
     {
         return TypedResults.BadRequest("請提供需要合成的文字");
@@ -213,6 +235,8 @@ app.MapGet("/api/tts-sapi", async Task<Results<FileContentHttpResult, BadRequest
         logger.LogError(ex, "SAPI TTS error");
         return TypedResults.Problem($"SAPI 語音合成失敗: {ex.Message}");
     }
-});
+})
+.WithSummary("語音合成 (TTS) - Windows SAPI")
+.WithDescription("使用 Windows 內建的 SAPI 進行語音合成。僅限 Windows 環境。");
 
 app.Run();
