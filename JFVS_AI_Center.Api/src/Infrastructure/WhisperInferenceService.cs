@@ -1,5 +1,6 @@
 using Whisper.net;
 using System.Text;
+using JFVS_AI_Center.Api.Infrastructure.Utils;
 
 namespace JFVS_AI_Center.Api.Infrastructure;
 
@@ -59,8 +60,12 @@ public class WhisperInferenceService : IDisposable
                     .WithOpenVinoEncoder(_pathProvider.WhisperOpenVinoXmlPath, device, null)
                     .Build();
 
-                var dummyData = new byte[16000];
-                using var ms = new MemoryStream(dummyData);
+                // 模擬 0.5 秒的靜音資料 (16000Hz, 16bit, Mono)
+                var rawData = new byte[16000];
+                // 使用專案現有的工具加上 WAV 標頭，以符合 Whisper.net WaveParser 的要求
+                var wavData = AudioFormatUtils.CreateWavWithHeader(rawData, 16000);
+                
+                using var ms = new MemoryStream(wavData);
                 
                 await foreach (var _ in processor.ProcessAsync(ms, ct)) { }
 
