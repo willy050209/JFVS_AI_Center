@@ -36,6 +36,12 @@ builder.Services.AddSingleton<IAiService, AiService>();
 
 builder.Services.AddSingleton<ModelPathProvider>();
 builder.Services.AddSingleton<IFileDownloadService, FileDownloadService>();
+
+// 註冊初始化器 (SRP 優化)
+builder.Services.AddSingleton<IResourceInitializer, FfmpegInitializer>();
+builder.Services.AddSingleton<IResourceInitializer, WhisperInitializer>();
+builder.Services.AddSingleton<IResourceInitializer, PiperInitializer>();
+
 builder.Services.AddSingleton<ModelManagerService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<ModelManagerService>());
 builder.Services.AddTransient<AudioConversionService>();

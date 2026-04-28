@@ -8,10 +8,11 @@ namespace JFVS_AI_Center.Api.Infrastructure;
 /// </summary>
 public class WhisperInferenceService : IDisposable
 {
-    private readonly WhisperFactory _factory;
+    private WhisperFactory? _factory;
     private readonly ModelPathProvider _pathProvider;
     private readonly ILogger<WhisperInferenceService> _logger;
     private string? _detectedDevice;
+    private readonly object _factoryLock = new();
 
     public WhisperInferenceService(ModelPathProvider pathProvider, ILogger<WhisperInferenceService> logger)
     {
@@ -19,7 +20,25 @@ public class WhisperInferenceService : IDisposable
         ArgumentNullException.ThrowIfNull(logger);
         _pathProvider = pathProvider;
         _logger = logger;
-        _factory = WhisperFactory.FromPath(_pathProvider.WhisperModelPath);
+    }
+
+    private WhisperFactory GetFactory()
+    {
+        if (_factory != null) return _factory;
+
+        lock (_factoryLock)
+        {
+            if (_factory != null) return _factory;
+
+            if (!File.Exists(_pathProvider.WhisperModelPath))
+            {
+                throw new FileNotFoundException("Whisper 模型檔案尚未就緒，請檢查 ModelManagerService 是否完成初始化。", _pathProvider.WhisperModelPath);
+            }
+
+            _logger.LogInformation("正在載入 Whisper Factory (模型路徑: {Path})...", _pathProvider.WhisperModelPath);
+            _factory = WhisperFactory.FromPath(_pathProvider.WhisperModelPath);
+            return _factory;
+        }
     }
 
     /// <summary>
@@ -32,23 +51,18 @@ public class WhisperInferenceService : IDisposable
             try
             {
                 _logger.LogInformation("正在執行 OpenVINO 模型預熱...");
+                var factory = GetFactory();
                 var device = GetBestDevice();
                 
-                // 透過建立一次 Processor 並執行微量推論來觸發 OpenVINO 模型的完全載入與編譯
-                using var processor = _factory.CreateBuilder()
+                using var processor = factory.CreateBuilder()
                     .WithLanguage("zh")
                     .WithOpenVinoEncoder(_pathProvider.WhisperOpenVinoXmlPath, device, null)
                     .Build();
 
-                // 模擬 0.5 秒的靜音資料 (16000Hz, 16bit, Mono => 16000 bytes)
-                // 這樣可以確保 OpenVINO 的執行節點已被啟動且編譯完成
                 var dummyData = new byte[16000];
                 using var ms = new MemoryStream(dummyData);
                 
-                await foreach (var _ in processor.ProcessAsync(ms, ct))
-                {
-                    // 僅預熱，不需要結果
-                }
+                await foreach (var _ in processor.ProcessAsync(ms, ct)) { }
 
                 _logger.LogInformation("OpenVINO 模型預熱完成。");
             }
@@ -63,10 +77,11 @@ public class WhisperInferenceService : IDisposable
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(wavPath);
 
+        var factory = GetFactory();
         var device = GetBestDevice();
         try
         {
-            using var processor = _factory.CreateBuilder()
+            using var processor = factory.CreateBuilder()
                 .WithLanguage("zh")
                 .WithOpenVinoEncoder(_pathProvider.WhisperOpenVinoXmlPath, device, null)
                 .Build();
@@ -113,7 +128,7 @@ public class WhisperInferenceService : IDisposable
             try
             {
                 _logger.LogInformation("正在嘗試傳統探測 OpenVINO 裝置: {Device}...", device);
-                using var testProcessor = _factory.CreateBuilder()
+                using var testProcessor = GetFactory().CreateBuilder()
                     .WithOpenVinoEncoder(_pathProvider.WhisperOpenVinoXmlPath, device, null)
                     .Build();
                 
@@ -135,6 +150,6 @@ public class WhisperInferenceService : IDisposable
     public void Dispose()
     {
         GC.SuppressFinalize(this);
-        _factory.Dispose();
+        _factory?.Dispose();
     }
 }
