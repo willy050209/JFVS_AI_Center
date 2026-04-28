@@ -16,15 +16,18 @@ public class ModelManagerService : IHostedService
 
     private readonly ModelPathProvider _pathProvider;
     private readonly IFileDownloadService _downloadService;
+    private readonly WhisperInferenceService _whisperService;
     private readonly ILogger<ModelManagerService> _logger;
 
     public ModelManagerService(
         ModelPathProvider pathProvider,
         IFileDownloadService downloadService,
+        WhisperInferenceService whisperService,
         ILogger<ModelManagerService> logger)
     {
         _pathProvider = pathProvider ?? throw new ArgumentNullException(nameof(pathProvider));
         _downloadService = downloadService ?? throw new ArgumentNullException(nameof(downloadService));
+        _whisperService = whisperService ?? throw new ArgumentNullException(nameof(whisperService));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -47,6 +50,9 @@ public class ModelManagerService : IHostedService
 
         await EnsureWhisperFilesAsync(cancellationToken);
         await EnsurePiperFilesAsync(cancellationToken);
+
+        // 模型預熱
+        _ = _whisperService.PreloadAsync(cancellationToken);
     }
 
     private async Task EnsureWhisperFilesAsync(CancellationToken ct)

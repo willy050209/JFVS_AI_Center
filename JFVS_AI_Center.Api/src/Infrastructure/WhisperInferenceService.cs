@@ -22,6 +22,43 @@ public class WhisperInferenceService : IDisposable
         _factory = WhisperFactory.FromPath(_pathProvider.WhisperModelPath);
     }
 
+    /// <summary>
+    /// 預熱 OpenVINO 模型，減少首次推論延遲
+    /// </summary>
+    public Task PreloadAsync(CancellationToken ct = default)
+    {
+        return Task.Run(async () =>
+        {
+            try
+            {
+                _logger.LogInformation("正在執行 OpenVINO 模型預熱...");
+                var device = GetBestDevice();
+                
+                // 透過建立一次 Processor 並執行微量推論來觸發 OpenVINO 模型的完全載入與編譯
+                using var processor = _factory.CreateBuilder()
+                    .WithLanguage("zh")
+                    .WithOpenVinoEncoder(_pathProvider.WhisperOpenVinoXmlPath, device, null)
+                    .Build();
+
+                // 模擬 0.5 秒的靜音資料 (16000Hz, 16bit, Mono => 16000 bytes)
+                // 這樣可以確保 OpenVINO 的執行節點已被啟動且編譯完成
+                var dummyData = new byte[16000];
+                using var ms = new MemoryStream(dummyData);
+                
+                await foreach (var _ in processor.ProcessAsync(ms, ct))
+                {
+                    // 僅預熱，不需要結果
+                }
+
+                _logger.LogInformation("OpenVINO 模型預熱完成。");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "OpenVINO 模型預熱失敗 (但不影響後續運作)");
+            }
+        }, ct);
+    }
+
     public async Task<string> TranscribeAsync(string wavPath, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(wavPath);
