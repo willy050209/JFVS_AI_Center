@@ -8,7 +8,7 @@ JFVS AI Center 是一個基於 **.NET 10.0** 與 **C# 14** 構建的全方位 AI
 
 - **Web (src/Web)**：基於 Minimal API 的高效能進入點，負責路由配置、Scalar UI 整合。
 - **Services (src/Services)**：核心業務邏輯層，包含 AI 對話流程控管 (`AiService`)、設備控制邏輯 (`DeviceControlService`) 與景點資訊服務 (`SceneService`)。
-- **Infrastructure (src/Infrastructure)**：技術基礎建設層，處理底層 MQTT 通訊 (`MqttClientService`)、OpenVINO 裝置偵測、Whisper 推論、Piper 語音合成及環境檢查 (`ModelManagerService`)。
+- **Infrastructure (src/Infrastructure)**：技術基礎建設層，處理底層 MQTT 通訊 (`MqttClientService`)、OpenVINO 裝置偵測、Whisper 推論與 Piper 語音合成。採用 `IResourceInitializer` 模式進行環境檢查與模型預熱，由 `ModelManagerService` 統一協調啟動流程。
 - **Models (src/Models)**：採用 C# Record 實作的不可變資料模型與 DTO。
 
 ## 🚀 核心功能
@@ -22,6 +22,7 @@ JFVS AI Center 是一個基於 **.NET 10.0** 與 **C# 14** 構建的全方位 AI
 - **語音辨識 (STT) (`POST /api/transcribe`)**
   - **OpenVINO™ 加速**：利用 Intel 推論引擎優化 Whisper 模型，支援 NPU、GPU 與 CPU 自動切換。
   - **自適應轉碼**：內建 `AudioConversionService` 搭配 FFmpeg，自動將上傳的音訊轉換為 16kHz, 16-bit PCM 格式。
+  - **模型預熱 (Warm-up)**：系統啟動時自動執行背景預熱推論，消除 OpenVINO 首次執行的編譯延遲，達成「開箱即用」的零延遲體驗。
 
 - **高品質語音合成 (TTS) (`GET /api/tts`)**
   - **Piper 引擎**：整合官方 Piper 離線 TTS，並透過 `AudioFormatUtils` 提供低延遲、高質感的 WAV 音訊。
