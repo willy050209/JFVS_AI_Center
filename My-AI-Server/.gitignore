@@ -1,0 +1,14 @@
+# Python virtual environment
+.venv/
+__pycache__/
+*.pyc
+
+# Local OpenVINO Models cache
+models/
+
+# Local configuration
+.env
+
+# System files
+.DS_Store
+Thumbs.db
