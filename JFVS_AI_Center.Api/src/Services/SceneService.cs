@@ -7,7 +7,13 @@ using JFVS_AI_Center.Api.Models;
 /// </summary>
 public interface ISceneService
 {
+    /// <summary>以景點名稱查詢景點資訊</summary>
     string GetSceneInfo(string sceneName);
+
+    /// <summary>
+    /// 從使用者輸入文字中比對關鍵字，回傳第一個命中景點的內容；未命中則回傳 null。
+    /// </summary>
+    string? TryGetSceneInfo(string userText);
 }
 
 /// <summary>
@@ -32,11 +38,21 @@ public class SceneService : ISceneService
         var scenes = _repository.GetScenes();
         var match = scenes.FirstOrDefault(s => s.Keywords.Any(sceneName.Contains));
 
+        return match?.Content ?? "目前沒有這個景點的即時資訊。";
+    }
+
+    public string? TryGetSceneInfo(string userText)
+    {
+        if (string.IsNullOrWhiteSpace(userText)) return null;
+
+        var scenes = _repository.GetScenes();
+        // 反向比對：檢查使用者文字中是否包含任一景點關鍵字
+        var match = scenes.FirstOrDefault(s => s.Keywords.Any(userText.Contains));
         if (match != null)
         {
+            _logger.LogInformation("[RAG 景點命中] {Title}", match.Title);
             return match.Content;
         }
-
-        return "目前沒有這個景點的即時資訊。";
+        return null;
     }
 }

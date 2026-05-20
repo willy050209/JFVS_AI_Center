@@ -25,3 +25,6 @@ JFVS_AI_Center.Api/ffplay.exe
 ## [OS]
 .DS_Store
 Thumbs.db
+
+## [Antigravity CLI]
+.antigravitycli/

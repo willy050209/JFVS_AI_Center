@@ -91,73 +91,36 @@ public class AiService : IAiService
 
     private async Task<string> RunChatWithToolsAsync(ChatSession session)
     {
-        List<ChatTool> tools =
-        [
-            ChatTool.CreateFunctionTool(
-                "get_scene_info",
-                "獲取學校景點的詳細資訊與即時狀態。",
-                BinaryData.FromString(@"{
-                    ""type"": ""object"",
-                    ""properties"": {
-                        ""scene_name"": { ""type"": ""string"", ""description"": ""景點名稱"" }
-                    },
-                    ""required"": [""scene_name""]
-                }")
-            ),
-            ChatTool.CreateFunctionTool(
-                "control_device",
-                "透過 MQTT 協定控制實體設備（燈光或風扇）。",
-                BinaryData.FromString(@"{
-                    ""type"": ""object"",
-                    ""properties"": {
-                        ""device_name"": { ""type"": ""string"", ""description"": ""設備名稱"" },
-                        ""action"": { ""type"": ""string"", ""description"": ""動作 (on 或 off)"" }
-                    },
-                    ""required"": [""device_name"", ""action""]
-                }")
-            )
-        ];
+        // === RAG 模式：先以關鍵字比對賀取景點資料，再注入為上下文 ===
+        // 避免依賴小型模型對 OpenAI Function Calling 的相容性
+        var lastUserText = session.Messages
+            .OfType<UserChatMessage>()
+            .LastOrDefault()?.Content
+            .FirstOrDefault(p => !string.IsNullOrWhiteSpace(p.Text))?.Text ?? string.Empty;
 
-        var options = new ChatCompletionOptions
+        var sceneContext = _sceneService.TryGetSceneInfo(lastUserText);
+        if (sceneContext != null)
         {
-             ToolChoice = ChatToolChoice.CreateAutoChoice()
-        };
-        foreach (var tool in tools) options.Tools.Add(tool);
-
-        ChatCompletion completion = await _client.CompleteChatAsync(session.Messages, options);
-
-        if (completion.FinishReason == ChatFinishReason.ToolCalls)
-        {
-            session.AddMessage(ChatMessage.CreateAssistantMessage(completion));
-
-            foreach (var toolCall in completion.ToolCalls)
-            {
-                string result = "";
-                if (toolCall.FunctionName == "get_scene_info")
-                {
-                    using var doc = JsonDocument.Parse(toolCall.FunctionArguments);
-                    var sceneName = doc.RootElement.GetProperty("scene_name").GetString() ?? "";
-                    result = _sceneService.GetSceneInfo(sceneName);
-                }
-                else if (toolCall.FunctionName == "control_device")
-                {
-                    using var doc = JsonDocument.Parse(toolCall.FunctionArguments);
-                    var deviceName = doc.RootElement.GetProperty("device_name").GetString() ?? "";
-                    var action = doc.RootElement.GetProperty("action").GetString() ?? "";
-                    result = await _deviceControlService.ControlDeviceAsync(deviceName, action);
-                }
-
-                session.AddMessage(ChatMessage.CreateToolMessage(toolCall.Id, result));
-            }
-
-            completion = await _client.CompleteChatAsync(session.Messages);
+            _logger.LogInformation("[RAG] 將景點資料注入為上下文。");
+            session.AddMessage(ChatMessage.CreateSystemMessage(
+                $"以下是相關景點資料，請依據此內容回答訪客的問題：\n{sceneContext}"));
         }
 
-        var finalReply = completion.Content[0].Text;
-        session.AddMessage(ChatMessage.CreateAssistantMessage(finalReply));
+        // 不傳入 tools，讓小型模型只負責組織自然語言回覆
+        ChatCompletion completion = await _client.CompleteChatAsync(session.Messages);
 
+        var finalReply = completion.Content is { Count: > 0 }
+            ? string.Concat(completion.Content.Select(p => p.Text))
+            : string.Empty;
+
+        if (string.IsNullOrWhiteSpace(finalReply))
+        {
+            _logger.LogWarning("模型回傳空內容 (FinishReason={Reason})。", completion.FinishReason);
+            finalReply = "抱歉，我現在有點想不清楚，可以再問我一次嗎？";
+        }
+
+        session.AddMessage(ChatMessage.CreateAssistantMessage(finalReply));
         finalReply = CleanTextForTts(finalReply);
-        
         _logger.LogInformation("<< [Session: {SessionId}] [回傳]: {Reply}", session.SessionId, finalReply);
         return finalReply;
     }
@@ -169,8 +132,14 @@ public class AiService : IAiService
     {
         if (string.IsNullOrEmpty(text)) return text;
 
-        text = Regex.Replace(text, @"[*#_~「」『』]", "");
-        text = Regex.Replace(text, @"\p{So}|\p{Cs}", "");
+        // 移除 Markdown 格式符號
+        text = Regex.Replace(text, @"[*#_~]", "");
+        // 移除補充平面 Emoji（U+1F000+）：在 .NET 字串中以代理對存在，\uD800-\uDBFF 為高代理
+        text = Regex.Replace(text, @"[\uD800-\uDBFF][\uDC00-\uDFFF]", "");
+        // 移除 BMP 內的圖形符號類 Emoji（U+2600-U+27BF：雜項符號、箭頭等）
+        text = Regex.Replace(text, @"[\u2600-\u27BF]", "");
+        // 移除剩餘孤立代理字元
+        text = Regex.Replace(text, @"\p{Cs}", "");
         text = text.Replace("\n", " ").Replace("\r", " ");
         text = Regex.Replace(text, @"\s+", " ");
 
