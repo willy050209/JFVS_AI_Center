@@ -50,7 +50,7 @@
 | 專案領域 | .NET (本專案使用) | Python 推薦替代方案 | 說明與建議 |
 | :---- | :---- | :---- | :---- |
 | **Web 框架** | ASP.NET Core Minimal APIs | **FastAPI** | Python 最強的非同步 API 框架，原生支援 async/await，且自帶 Swagger UI，寫法和 Minimal API 極度相似。 |
-| **LLM 串接** | OpenAI 官方 SDK | **openai** (Python) 或 **LangChain** | 直接使用 Python 版 openai 套件即可無縫連接 LM Studio。 |
+| **LLM 串接** | OpenAI 官方 SDK | **openai** (Python) 或 **LangChain** | 可無縫串接 My-AI-Server 的 OpenAI 相容 API 端點。 |
 | **對話狀態** | ConcurrentDictionary | 內建 **dict** \+ **asyncio.Lock()** | FastAPI 底層是非同步事件迴圈，若涉及多併發寫入，請記得加上非同步鎖。 |
 | **語音轉文字** | Whisper.net \+ OpenVINO | **faster-whisper** | 基於 CTranslate2，效能極高。若需 Intel 顯卡加速，可改用 openvino-whisper。 |
 | **文字轉語音** | Piper TTS (.exe) \+ Utils | **piper-tts** \+ **pyttsx3** | Piper 有官方的 Python package，不需要像 C\# 那樣辛苦處理 IPC 和 WAV Header。 |

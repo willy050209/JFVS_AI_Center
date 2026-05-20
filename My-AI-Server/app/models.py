@@ -51,9 +51,27 @@ class ModelManager:
         # Ensure model is downloaded
         local_path = self.download_model(repo_id)
         
+        import json
+        config_path = local_path / "config.json"
+        is_vlm = False
+        if config_path.exists():
+            try:
+                with open(config_path, "r", encoding="utf-8") as f:
+                    config_data = json.load(f)
+                    model_type = config_data.get("model_type", "")
+                    architectures = config_data.get("architectures", [])
+                    if model_type == "gemma4" or any("ConditionalGeneration" in arch for arch in architectures):
+                        is_vlm = True
+            except Exception as e:
+                print(f"Warning: Failed to parse config.json at {config_path}: {e}")
+
         print(f"Loading OpenVINO model '{repo_id}' on device '{device}'...")
-        # LLMPipeline compiles the IR graph to the target device
-        self.pipeline = ov_genai.LLMPipeline(str(local_path), device)
+        if is_vlm:
+            # Gemma 4 conditional generation models are loaded with VLMPipeline
+            self.pipeline = ov_genai.VLMPipeline(str(local_path), device)
+        else:
+            self.pipeline = ov_genai.LLMPipeline(str(local_path), device)
+            
         self.active_model = repo_id
         self.active_device = device
         print(f"Model '{repo_id}' loaded successfully on device '{device}'!")
@@ -133,7 +151,13 @@ class ModelManager:
         prompt = tokenizer.apply_chat_template(messages, add_generation_prompt=True)
         config = self._prepare_generation_config(params)
         
-        return self.pipeline.generate(prompt, config)
+        if isinstance(self.pipeline, ov_genai.VLMPipeline):
+            res = self.pipeline.generate(prompt, generation_config=config)
+            if hasattr(res, "texts"):
+                return res.texts[0]
+            return str(res)
+        else:
+            return self.pipeline.generate(prompt, config)
 
     def generate_stream(self, messages: list[dict], params: dict):
         """
@@ -155,7 +179,10 @@ class ModelManager:
 
         def run_generation():
             try:
-                self.pipeline.generate(prompt, config, streamer_callback)
+                if isinstance(self.pipeline, ov_genai.VLMPipeline):
+                    self.pipeline.generate(prompt, generation_config=config, streamer=streamer_callback)
+                else:
+                    self.pipeline.generate(prompt, config, streamer_callback)
             except Exception as e:
                 q.put(e)
             finally:

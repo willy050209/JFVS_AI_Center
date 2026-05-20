@@ -8,7 +8,7 @@ load_dotenv()
 class Settings:
     HOST: str = os.getenv("HOST", "0.0.0.0")
     PORT: int = int(os.getenv("PORT", "8000"))
-    DEFAULT_MODEL: str = os.getenv("DEFAULT_MODEL", "Intel/Qwen2.5-3B-Instruct-int4-ov")
+    DEFAULT_MODEL: str = os.getenv("DEFAULT_MODEL", "OpenVINO/gemma-4-E4B-it-int4-ov")
     OPENVINO_DEVICE: str = os.getenv("OPENVINO_DEVICE", "AUTO")
     
     # Resolve absolute path for models directory

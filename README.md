@@ -15,7 +15,8 @@ JFVS AI Center 是一個基於 **.NET 10.0** 與 **C# 14** 構建的全方位 AI
 
 - **AI 智能聊天 (`POST /chat`)**
   - **多 Session 管理**：支援按 `SessionId` 獨立維護對話紀錄，確保多用戶平行使用的上下文隔離。
-  - **本地大腦**：完美串接 LM Studio (OpenAI 相容 API)，確保所有對話數據均保留在校園內部。
+  - **本地大腦**：串接本機 Python 微服務 `My-AI-Server` (FastAPI)，利用 OpenVINO™ GenAI 進行本機 LLM 推理，確保所有對話數據保留在校園內部。
+  - **Gemma 4 支援**：整合最新 `gemma-4-E4B-it-int4-ov` 條件生成模型，內部採用 `openvino-genai` 的 `VLMPipeline` (使用 nightly `2026.3.dev` 開發包) 進行高效對話生成。
   - **工具呼叫 (Tool Calling)**：AI 具備自主決策能力，透過 `DeviceControlService` 與 `SceneService` 自動執行任務。
   - **智能清掃**：內建對話歷史限制，自動優化 Context 視窗以節省運算資源。
 
@@ -38,8 +39,8 @@ JFVS AI Center 是一個基於 **.NET 10.0** 與 **C# 14** 構建的全方位 AI
 ## 🛠️ 開發環境需求
 
 - **.NET 10.0 SDK** (或更高版本)。
+- **Python 3.10+** (用於運行 `My-AI-Server`，C# 啟動時會自動建立虛擬環境與下載依賴)。
 - **Docker** (選配，用於容器化部署)。
-- **LM Studio**：建議運行於本地 1234 埠口。
 - **硬體推薦**：支援 Intel OpenVINO 的處理器或具備專屬 NPU 的設備。
 
 ## ⚙️ 配置說明
@@ -47,16 +48,23 @@ JFVS AI Center 是一個基於 **.NET 10.0** 與 **C# 14** 構建的全方位 AI
 ### 核心設定 (`appsettings.json`)
 ```json
 {
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft.AspNetCore": "Warning"
+    }
+  },
+  "AllowedHosts": "*",
   "Mqtt": {
     "Host": "broker.emqx.io",
     "Port": 1883,
-    "Username": "",
-    "Password": ""
+    "Username": "jfvs000",
+    "Password": "jfvs000"
   },
   "Ai": {
-    "Endpoint": "http://127.0.0.1:1234/v1",
-    "Model": "local-model",
-    "ApiKey": "lm-studio"
+    "Endpoint": "http://127.0.0.1:8000/v1",
+    "Model": "OpenVINO/gemma-4-E4B-it-int4-ov",
+    "ApiKey": "local-server"
   }
 }
 ```
@@ -67,7 +75,7 @@ JFVS AI Center 是一個基於 **.NET 10.0** 與 **C# 14** 構建的全方位 AI
    ```powershell
    dotnet build
    ```
-2. **執行伺服器**：
+2. **執行伺服器** (啟動時會自動在背景初始化 `My-AI-Server` 執行環境並載入模型)：
    ```powershell
    dotnet run --project JFVS_AI_Center.Api/JFVS_AI_Center.Api.csproj
    ```
@@ -76,10 +84,9 @@ JFVS AI Center 是一個基於 **.NET 10.0** 與 **C# 14** 構建的全方位 AI
 
 ## 📦 技術棧
 
-- **Runtime**: .NET 10.0 (Win-x64)
-- **Framework**: ASP.NET Core Minimal API
-- **AI/ML**: Whisper.net, OpenVINO, Piper TTS
+- **Backend Runtime**: .NET 10.0 (Win-x64)
+- **Backend Framework**: ASP.NET Core Minimal API
+- **Python Inference Server**: FastAPI + Uvicorn
+- **AI/ML**: OpenVINO GenAI (`VLMPipeline` / `LLMPipeline` 雙模支援), Whisper.net, Piper TTS
 - **Communication**: MQTTnet
 - **Media**: Xabe.FFmpeg
-
-

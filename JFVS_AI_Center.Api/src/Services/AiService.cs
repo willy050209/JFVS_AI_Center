@@ -91,23 +91,32 @@ public class AiService : IAiService
 
     private async Task<string> RunChatWithToolsAsync(ChatSession session)
     {
-        // === RAG 模式：先以關鍵字比對賀取景點資料，再注入為上下文 ===
+        // === RAG 模式：先以關鍵字比對取得景點資料，再注入為「本次推理專用」的臨時上下文 ===
         // 避免依賴小型模型對 OpenAI Function Calling 的相容性
+        // 重要：RAG context 僅注入 messagesToSend，不寫回 session，防止 history 被重複資料污染。
         var lastUserText = session.Messages
             .OfType<UserChatMessage>()
             .LastOrDefault()?.Content
             .FirstOrDefault(p => !string.IsNullOrWhiteSpace(p.Text))?.Text ?? string.Empty;
 
+        List<ChatMessage> messagesToSend;
         var sceneContext = _sceneService.TryGetSceneInfo(lastUserText);
         if (sceneContext != null)
         {
             _logger.LogInformation("[RAG] 將景點資料注入為上下文。");
-            session.AddMessage(ChatMessage.CreateSystemMessage(
-                $"以下是相關景點資料，請依據此內容回答訪客的問題：\n{sceneContext}"));
+            // 建立僅用於本次推理的訊息列表：在最後一則使用者訊息之前插入 RAG context
+            messagesToSend = [.. session.Messages];
+            messagesToSend.Insert(messagesToSend.Count - 1,
+                ChatMessage.CreateSystemMessage(
+                    $"以下是相關景點資料，請依據此內容回答訪客的問題：\n{sceneContext}"));
+        }
+        else
+        {
+            messagesToSend = session.Messages;
         }
 
         // 不傳入 tools，讓小型模型只負責組織自然語言回覆
-        ChatCompletion completion = await _client.CompleteChatAsync(session.Messages);
+        ChatCompletion completion = await _client.CompleteChatAsync(messagesToSend);
 
         var finalReply = completion.Content is { Count: > 0 }
             ? string.Concat(completion.Content.Select(p => p.Text))
