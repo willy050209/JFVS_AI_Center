@@ -16,8 +16,8 @@ public record AiOptions
     /// <summary>
     /// 使用的模型名稱
     /// </summary>
-    [DefaultValue("OpenVINO/Qwen2.5-Coder-3B-Instruct-int4-ov")]
-    public string Model { get; init; } = "OpenVINO/Qwen2.5-Coder-3B-Instruct-int4-ov";
+    [DefaultValue("OpenVINO/gemma-4-E4B-it-int4-ov")]
+    public string Model { get; init; } = "OpenVINO/gemma-4-E4B-it-int4-ov";
 
     /// <summary>
     /// API 金鑰
