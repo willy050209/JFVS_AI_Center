@@ -13,6 +13,7 @@ public class TtsService : ITtsService
 {
     private readonly ModelPathProvider _pathProvider;
     private readonly ILogger<TtsService> _logger;
+    private readonly Lazy<OpenCCSharp.Converter> _chineseConverter;
 
     public TtsService(ModelPathProvider pathProvider, ILogger<TtsService> logger)
     {
@@ -20,6 +21,15 @@ public class TtsService : ITtsService
         ArgumentNullException.ThrowIfNull(logger);
         _pathProvider = pathProvider;
         _logger = logger;
+
+        _chineseConverter = new Lazy<OpenCCSharp.Converter>(() =>
+        {
+            return OpenCCSharp.Config.t2s.CreateConverter(name =>
+            {
+                var dictPath = Path.Combine(AppContext.BaseDirectory, "src", "Infrastructure", "Dictionaries", $"{name}.txt");
+                return File.ReadAllText(dictPath);
+            });
+        });
     }
 
     public async Task<byte[]> SynthesizeAsync(string text, string? voiceName = null)
@@ -34,7 +44,8 @@ public class TtsService : ITtsService
             throw new FileNotFoundException("Piper TTS 引擎或模型尚未就緒。");
         }
 
-        _logger.LogInformation("正在使用 Piper 本機合成語音: {Text}", text);
+        var simplifiedText = _chineseConverter.Value.Convert(text);
+        _logger.LogInformation("正在使用 Piper 本機合成語音: {Text} (原始文字: {OriginalText})", simplifiedText, text);
 
         var startInfo = new ProcessStartInfo
         {
@@ -52,7 +63,7 @@ public class TtsService : ITtsService
 
         using (var sw = new StreamWriter(process.StandardInput.BaseStream, new UTF8Encoding(false)))
         {
-            await sw.WriteLineAsync(text);
+            await sw.WriteLineAsync(simplifiedText);
         }
 
         using var ms = new MemoryStream();
