@@ -1,5 +1,6 @@
 using System.Speech.Synthesis;
 using System.Speech.AudioFormat;
+using JFVS_AI_Center.Api.Infrastructure.Utils;
 using System.IO;
 
 namespace JFVS_AI_Center.Api.Infrastructure;
@@ -31,52 +32,52 @@ public class SapiTtsService : ISapiTtsService
     }
 
     public Task<byte[]> SynthesizeAsync(string text)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(text);
+	{
+		ArgumentException.ThrowIfNullOrWhiteSpace(text);
 
-        if (_isRunningInContainer)
-        {
-            _logger.LogError("偵測到處於容器環境，Windows SAPI (System.Speech) 無法運作。請改用 /api/tts (Piper)。");
-            throw new PlatformNotSupportedException("Windows SAPI 在容器環境下不被支援，請改用 Piper TTS 服務。");
-        }
+		if (_isRunningInContainer)
+		{
+			_logger.LogError("偵測到處於容器環境，Windows SAPI (System.Speech) 無法運作。請改用 /api/tts (Piper)。");
+			throw new PlatformNotSupportedException("Windows SAPI 在容器環境下不被支援，請改用 Piper TTS 服務。");
+		}
 
-        return Task.Run(() =>
-        {
-            _logger.LogInformation("開始 SAPI 合成: {Text}", text);
-            
-            try
-            {
-                using var synthesizer = new SpeechSynthesizer();
-                _logger.LogInformation("SpeechSynthesizer 已建立");
+		return Task.Run(() =>
+		{
+			_logger.LogInformation("開始 SAPI 安全合成 (ESP32 優化版): {Text}", text);
+			
+			try
+			{
+				using var synthesizer = new SpeechSynthesizer();
+				using var ms = new MemoryStream();
 
-                using var ms = new MemoryStream();
-                synthesizer.SetOutputToWaveStream(ms);
-                _logger.LogInformation("已設定輸出流");
+				// 嚴格限制輸出格式為 16000Hz, 16-bit, 單聲道的純 Raw PCM 數據（流中不會包含 WAV 檔頭與雜訊）
+				var audioFormat = new SpeechAudioFormatInfo(16000, AudioBitsPerSample.Sixteen, AudioChannel.Mono);
+				synthesizer.SetOutputToAudioStream(ms, audioFormat);
 
-                var voices = synthesizer.GetInstalledVoices();
-                _logger.LogInformation("偵測到 {Count} 個語音角色", voices.Count);
+				var voices = synthesizer.GetInstalledVoices();
+				var chineseVoice = voices.FirstOrDefault(v => v.VoiceInfo.Culture.Name.Contains("zh"));
+				if (chineseVoice != null)
+				{
+					_logger.LogInformation("選擇語音: {Name}", chineseVoice.VoiceInfo.Name);
+					synthesizer.SelectVoice(chineseVoice.VoiceInfo.Name);
+				}
 
-                var chineseVoice = voices.FirstOrDefault(v => v.VoiceInfo.Culture.Name.Contains("zh"));
-                if (chineseVoice != null)
-                {
-                    _logger.LogInformation("選擇語音: {Name}", chineseVoice.VoiceInfo.Name);
-                    synthesizer.SelectVoice(chineseVoice.VoiceInfo.Name);
-                }
+				synthesizer.Speak(text);
+				synthesizer.SetOutputToNull();
 
-                _logger.LogInformation("開始執行 Speak...");
-                synthesizer.Speak(text);
-                _logger.LogInformation("Speak 完成");
+				// 取得乾淨的純 PCM 陣列
+				var rawPcmData = ms.ToArray();
+				_logger.LogInformation("SAPI 純 PCM 合成成功，大小: {Size} bytes", rawPcmData.Length);
 
-                synthesizer.SetOutputToNull();
-                var data = ms.ToArray();
-                _logger.LogInformation("合成成功，大小: {Size} bytes", data.Length);
-                return data;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "SAPI 內部發生錯誤 (可能缺少語音引擎或音訊設備)");
-                throw;
-            }
-        });
-    }
+				// 調用音訊工具，加上乾淨、標準、無額外元數據區塊的 44 位元組 WAV 檔頭
+				// 確保 ESP32 的解碼庫在讀取前 44 位元組後，能完美對齊硬體 I2S 時鐘並順暢播放
+				return AudioFormatUtils.CreateWavWithHeader(rawPcmData, 16000);
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "SAPI 內部發生錯誤");
+				throw;
+			}
+		});
+	}
 }
