@@ -9,7 +9,7 @@ This server is designed to run efficiently on Intel hardware (CPU, Integrated GP
 ## Features
 
 - 🚀 **Intel OpenVINO Acceleration**: Hardware-optimized model execution via OpenVINO GenAI on CPU, GPU, and NPU.
-- 📦 **Automated Downloading**: Simply request a model by its Hugging Face repository name (e.g. `Intel/Qwen2.5-3B-Instruct-int4-ov`), and the server will download, cache, and load it automatically.
+- 📦 **Automated Downloading**: Simply request a model by its Hugging Face repository name (e.g. `OpenVINO/gemma-4-E4B-it-int4-ov`), and the server will download, cache, and load it automatically.
 - 🔄 **OpenAI-Compatible API**: Implements standard endpoints (`/v1/chat/completions` with streaming, `/v1/models`) making it compatible with frontends like **OpenWebUI**, **LibreChat**, or the official OpenAI SDK.
 - 📖 **Beautiful Interactive Docs**: Serves standard Swagger UI (`/docs`) and the premium, dark-themed **Scalar API Reference** (`/scalar`).
 
@@ -43,7 +43,7 @@ HOST=0.0.0.0
 PORT=8000
 
 # Default model to load on startup
-DEFAULT_MODEL=Intel/Qwen2.5-3B-Instruct-int4-ov
+DEFAULT_MODEL=OpenVINO/gemma-4-E4B-it-int4-ov
 
 # Hardware target (AUTO, CPU, GPU, NPU)
 OPENVINO_DEVICE=AUTO
@@ -106,7 +106,7 @@ Once the server is running, open your browser to:
 curl -X POST http://localhost:8000/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "Intel/Qwen2.5-3B-Instruct-int4-ov",
+    "model": "OpenVINO/gemma-4-E4B-it-int4-ov",
     "messages": [
       {"role": "system", "content": "You are a helpful assistant."},
       {"role": "user", "content": "Explain Intel OpenVINO in one sentence."}
@@ -128,7 +128,7 @@ client = OpenAI(
 )
 
 response = client.chat.completions.create(
-    model="Intel/Qwen2.5-3B-Instruct-int4-ov",
+    model="OpenVINO/gemma-4-E4B-it-int4-ov",
     messages=[
         {"role": "system", "content": "You are a helpful assistant."},
         {"role": "user", "content": "What is the capital of France?"}
